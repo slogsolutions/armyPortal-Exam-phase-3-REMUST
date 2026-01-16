@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id       Int    @id @default(autoincrement())
+  username String @unique
+  password String
+  role     String
+}
+
+model Rank {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  candidates Candidate[]
+}
+
+model Command {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  candidates Candidate[]
+}
+
+model ConductingCenter {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  candidates Candidate[]
+}
+
+model Trade {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  negativeMarking Float?
+  minPercent      Float  @default(40)
+
+  wp1 Boolean @default(false)
+  wp2 Boolean @default(false)
+
+  pr1 Boolean @default(false)
+  pr2 Boolean @default(false)
+  pr3 Boolean @default(false)
+  pr4 Boolean @default(false)
+  pr5 Boolean @default(false)
+
+  oral Boolean @default(false)
+
+  candidates Candidate[]
+}
+
+model Candidate {
+  id     Int    @id @default(autoincrement())
+  armyNo String @unique
+  name   String
+  unit   String
+  medCat String
+  corps  String
+
+  dob DateTime
+  doe DateTime
+
+  rankId    Int
+  tradeId   Int
+  commandId Int
+  centerId  Int
+
+  rank    Rank             @relation(fields: [rankId], references: [id])
+  trade   Trade            @relation(fields: [tradeId], references: [id])
+  command Command          @relation(fields: [commandId], references: [id])
+  center  ConductingCenter @relation(fields: [centerId], references: [id])
+}
