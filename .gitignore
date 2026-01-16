@@ -1,0 +1,11 @@
+# Client
+client/.env
+client/node_modules/
+
+# Server
+server/.env
+server/node_modules/
+
+# General
+node_modules/
+.env
