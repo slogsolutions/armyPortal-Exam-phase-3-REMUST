@@ -9,7 +9,7 @@ import CandidateResult from "./candidate/Result";
 import Masters from "./admin/Masters";
 import TradeConfig from "./admin/TradeConfig";
 import UploadPaper from "./admin/UploadPaper";
-import PracticalMarks from "./admin/PracticalMarks";
+import ExamOfficer from "./admin/ExamOfficer";
 import Results from "./admin/Results";
 
 export default function App() {
@@ -26,7 +26,7 @@ export default function App() {
         <Route path="/admin/masters" element={<Masters />} />
         <Route path="/admin/trade-config" element={<TradeConfig />} />
         <Route path="/admin/upload" element={<UploadPaper/>} />
-        <Route path="/admin/practical" element={<PracticalMarks />} />
+        <Route path="/admin/exam-officer" element={<ExamOfficer />} />
         <Route path="/admin/results" element={<Results />} />
       </Routes>
     </BrowserRouter>

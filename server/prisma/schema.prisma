@@ -54,6 +54,7 @@ model Trade {
   oral Boolean @default(false)
 
   candidates Candidate[]
+  examPapers ExamPaper[]
 }
 
 model Candidate {
@@ -67,6 +68,8 @@ model Candidate {
   dob DateTime
   doe DateTime
 
+  selectedExamTypes String  // JSON array of selected exam types: ["WP-I", "WP-II"]
+
   rankId    Int
   tradeId   Int
   commandId Int
@@ -76,4 +79,85 @@ model Candidate {
   trade   Trade            @relation(fields: [tradeId], references: [id])
   command Command          @relation(fields: [commandId], references: [id])
   center  ConductingCenter @relation(fields: [centerId], references: [id])
+
+  examAttempts ExamAttempt[]
+  practicalMarks PracticalMarks?
+}
+
+model ExamPaper {
+  id        Int      @id @default(autoincrement())
+  tradeId   Int
+  paperType String   // WP-I, WP-II (only written papers)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trade      Trade       @relation(fields: [tradeId], references: [id])
+  questions  Question[]
+  examAttempts ExamAttempt[]
+
+  @@unique([tradeId, paperType])
+}
+
+model Question {
+  id            Int       @id @default(autoincrement())
+  examPaperId   Int
+  questionText  String    @db.Text
+  optionA       String?
+  optionB       String?
+  optionC       String?
+  optionD       String?
+  correctAnswer String    // A, B, C, or D
+  marks         Float     @default(1.0)
+  questionOrder Int
+  createdAt     DateTime  @default(now())
+
+  examPaper ExamPaper @relation(fields: [examPaperId], references: [id], onDelete: Cascade)
+  answers   Answer[]
+}
+
+model ExamAttempt {
+  id          Int       @id @default(autoincrement())
+  candidateId Int
+  examPaperId Int
+  score       Float     @default(0)
+  totalMarks  Float     @default(0)
+  percentage  Float     @default(0)
+  status      String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  startedAt   DateTime?
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+  examPaper ExamPaper @relation(fields: [examPaperId], references: [id])
+  answers   Answer[]
+}
+
+model Answer {
+  id            Int    @id @default(autoincrement())
+  examAttemptId Int
+  questionId    Int
+  selectedAnswer String // A, B, C, or D
+  isCorrect     Boolean
+  marksObtained Float
+  createdAt     DateTime @default(now())
+
+  examAttempt ExamAttempt @relation(fields: [examAttemptId], references: [id], onDelete: Cascade)
+  question    Question    @relation(fields: [questionId], references: [id])
+}
+
+model PracticalMarks {
+  id          Int       @id @default(autoincrement())
+  candidateId Int       @unique
+  pr1         Float?
+  pr2         Float?
+  pr3         Float?
+  pr4         Float?
+  pr5         Float?
+  oral        Float?
+  enteredBy   Int       // Admin ID who entered the marks
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 }
