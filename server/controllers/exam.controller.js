@@ -1,5 +1,7 @@
 const prisma = require("../config/prisma");
 const XLSX = require("xlsx");
+const fs = require("fs");
+const crypto = require("crypto");
 
 /**
  * Get exam paper for candidate (only mapped trade allowed)
@@ -53,11 +55,11 @@ exports.getAvailablePapers = async (req, res) => {
       ? JSON.parse(candidate.selectedExamTypes) 
       : [];
 
-    // Only get WP-I and WP-II papers
+    // Only get WP-I, WP-II, and WP-III papers
     const papers = await prisma.examPaper.findMany({
       where: { 
         tradeId: candidate.tradeId,
-        paperType: { in: ["WP-I", "WP-II"] },
+        paperType: { in: ["WP-I", "WP-II", "WP-III"] },
         isActive: true
       },
       include: {
@@ -77,11 +79,65 @@ exports.getAvailablePapers = async (req, res) => {
 };
 
 /**
- * Start exam
+ * Start exam with slot validation
  */
 exports.startExam = async (req, res) => {
   try {
-    const { candidateId, examPaperId } = req.body;
+    const { candidateId, examPaperId, examSlotId } = req.body;
+
+    // Validate candidate
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: Number(candidateId) },
+      include: { trade: true }
+    });
+
+    if (!candidate) {
+      return res.status(404).json({ error: "Candidate not found" });
+    }
+
+    // Validate exam paper
+    const paper = await prisma.examPaper.findUnique({
+      where: { id: Number(examPaperId) },
+      include: { questions: true }
+    });
+
+    if (!paper) {
+      return res.status(404).json({ error: "Paper not found" });
+    }
+
+    // Validate slot if provided
+    if (examSlotId) {
+      const slot = await prisma.examSlot.findUnique({
+        where: { id: Number(examSlotId) }
+      });
+
+      if (!slot) {
+        return res.status(404).json({ error: "Exam slot not found" });
+      }
+
+      // Check if current time is within slot time
+      const now = new Date();
+      if (now < new Date(slot.startTime)) {
+        return res.status(400).json({ error: "Exam slot has not started yet" });
+      }
+      if (now > new Date(slot.endTime)) {
+        return res.status(400).json({ error: "Exam slot has ended" });
+      }
+
+      // Check if candidate is assigned to this slot
+      const isAssigned = await prisma.examSlot.findFirst({
+        where: {
+          id: Number(examSlotId),
+          candidates: {
+            some: { id: Number(candidateId) }
+          }
+        }
+      });
+
+      if (!isAssigned) {
+        return res.status(403).json({ error: "Candidate not assigned to this exam slot" });
+      }
+    }
 
     // Check if attempt already exists
     let attempt = await prisma.examAttempt.findFirst({
@@ -96,19 +152,12 @@ exports.startExam = async (req, res) => {
       return res.json(attempt);
     }
 
-    const paper = await prisma.examPaper.findUnique({
-      where: { id: Number(examPaperId) },
-      include: { questions: true }
-    });
-
-    if (!paper) {
-      return res.status(404).json({ error: "Paper not found" });
-    }
-
+    // Create new attempt
     attempt = await prisma.examAttempt.create({
       data: {
         candidateId: Number(candidateId),
         examPaperId: Number(examPaperId),
+        examSlotId: examSlotId ? Number(examSlotId) : null,
         score: 0,
         totalMarks: paper.questions.reduce((sum, q) => sum + q.marks, 0),
         percentage: 0,
@@ -276,7 +325,7 @@ exports.uploadPaper = async (req, res) => {
 };
 
 /**
- * Bulk upload papers from Excel
+ * Enhanced bulk upload with support for Excel, CSV, and encrypted .dat files
  */
 exports.bulkUploadPapers = async (req, res) => {
   try {
@@ -284,10 +333,45 @@ exports.bulkUploadPapers = async (req, res) => {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(worksheet);
+    const { password, fileType } = req.body;
+    let data = [];
+
+    // Handle different file types
+    if (fileType === 'dat' && req.file.originalname.endsWith('.dat')) {
+      // Handle encrypted .dat file
+      if (!password) {
+        return res.status(400).json({ error: "Password required for encrypted .dat files" });
+      }
+      
+      try {
+        const decryptedData = decryptDatFile(req.file.buffer, password);
+        data = JSON.parse(decryptedData);
+      } catch (decryptError) {
+        return res.status(400).json({ error: "Invalid password or corrupted .dat file" });
+      }
+    } else if (req.file.originalname.endsWith('.csv')) {
+      // Handle CSV file
+      const csvContent = req.file.buffer.toString('utf-8');
+      const lines = csvContent.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim()) {
+          const values = lines[i].split(',').map(v => v.trim());
+          const row = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index];
+          });
+          data.push(row);
+        }
+      }
+    } else {
+      // Handle Excel file
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      data = XLSX.utils.sheet_to_json(worksheet);
+    }
 
     const results = [];
     const errors = [];
@@ -296,7 +380,7 @@ exports.bulkUploadPapers = async (req, res) => {
       try {
         // Expected columns: Trade, PaperType, Question, OptionA, OptionB, OptionC, OptionD, CorrectAnswer, Marks
         const tradeName = row.Trade || row.trade;
-        const paperType = row.PaperType || row.paperType || row['Paper Type'];
+        const paperType = normalizePaperType(row.PaperType || row.paperType || row['Paper Type']);
         const questionText = row.Question || row.question;
         const optionA = row.OptionA || row.optionA || row['Option A'];
         const optionB = row.OptionB || row.optionB || row['Option B'];
@@ -306,7 +390,14 @@ exports.bulkUploadPapers = async (req, res) => {
         const marks = parseFloat(row.Marks || row.marks || 1.0);
 
         if (!tradeName || !paperType || !questionText) {
-          errors.push({ row, error: "Missing required fields" });
+          errors.push({ row, error: "Missing required fields (Trade, PaperType, Question)" });
+          continue;
+        }
+
+        // Validate paper type
+        const validPaperTypes = ["WP-I", "WP-II", "WP-III", "PR-I", "PR-II", "PR-III", "PR-IV", "PR-V", "ORAL"];
+        if (!validPaperTypes.includes(paperType)) {
+          errors.push({ row, error: `Invalid paper type: ${paperType}. Valid types: ${validPaperTypes.join(', ')}` });
           continue;
         }
 
@@ -320,42 +411,72 @@ exports.bulkUploadPapers = async (req, res) => {
           continue;
         }
 
-        // Find or create paper
-        let paper = await prisma.examPaper.findFirst({
-          where: { tradeId: trade.id, paperType }
-        });
+        // Check if paper type is enabled for this trade
+        const paperTypeMap = {
+          'WP-I': 'wp1',
+          'WP-II': 'wp2', 
+          'WP-III': 'wp3',
+          'PR-I': 'pr1',
+          'PR-II': 'pr2',
+          'PR-III': 'pr3',
+          'PR-IV': 'pr4',
+          'PR-V': 'pr5',
+          'ORAL': 'oral'
+        };
 
-        if (!paper) {
-          paper = await prisma.examPaper.create({
-            data: {
-              tradeId: trade.id,
-              paperType,
-              isActive: true
-            }
-          });
+        const tradeField = paperTypeMap[paperType];
+        if (tradeField && !trade[tradeField]) {
+          errors.push({ row, error: `${paperType} is not enabled for trade ${trade.name}` });
+          continue;
         }
 
-        // Get question count
+        // Find or create paper (only for written exams)
+        let paper = null;
+        if (paperType.startsWith('WP')) {
+          paper = await prisma.examPaper.findFirst({
+            where: { tradeId: trade.id, paperType }
+          });
+
+          if (!paper) {
+            paper = await prisma.examPaper.create({
+              data: {
+                tradeId: trade.id,
+                paperType,
+                isActive: true
+              }
+            });
+          }
+        }
+
+        // For practical and oral exams, we don't create papers, just validate
+        if (!paper && !paperType.startsWith('WP')) {
+          results.push({ trade: tradeName, paperType, message: "Validated practical/oral exam type" });
+          continue;
+        }
+
+        // Get question count for ordering
         const questionCount = await prisma.question.count({
           where: { examPaperId: paper.id }
         });
 
-        // Create question
-        const question = await prisma.question.create({
-          data: {
-            examPaperId: paper.id,
-            questionText,
-            optionA: optionA || null,
-            optionB: optionB || null,
-            optionC: optionC || null,
-            optionD: optionD || null,
-            correctAnswer,
-            marks,
-            questionOrder: questionCount + 1
-          }
-        });
+        // Create question (only for written exams)
+        if (paper) {
+          const question = await prisma.question.create({
+            data: {
+              examPaperId: paper.id,
+              questionText,
+              optionA: optionA || null,
+              optionB: optionB || null,
+              optionC: optionC || null,
+              optionD: optionD || null,
+              correctAnswer,
+              marks,
+              questionOrder: questionCount + 1
+            }
+          });
 
-        results.push({ trade: tradeName, paperType, questionId: question.id });
+          results.push({ trade: tradeName, paperType, questionId: question.id });
+        }
       } catch (err) {
         errors.push({ row, error: err.message });
       }
@@ -372,3 +493,51 @@ exports.bulkUploadPapers = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+/**
+ * Helper function to normalize paper type names
+ */
+function normalizePaperType(paperType) {
+  if (!paperType) return paperType;
+  
+  const typeMap = {
+    'WP1': 'WP-I',
+    'WP2': 'WP-II',
+    'WP3': 'WP-III',
+    'WP-1': 'WP-I',
+    'WP-2': 'WP-II',
+    'WP-3': 'WP-III',
+    'PR1': 'PR-I',
+    'PR2': 'PR-II',
+    'PR3': 'PR-III',
+    'PR4': 'PR-IV',
+    'PR5': 'PR-V',
+    'PR-1': 'PR-I',
+    'PR-2': 'PR-II',
+    'PR-3': 'PR-III',
+    'PR-4': 'PR-IV',
+    'PR-5': 'PR-V'
+  };
+  
+  return typeMap[paperType.toUpperCase()] || paperType;
+}
+
+/**
+ * Helper function to decrypt .dat files
+ */
+function decryptDatFile(buffer, password) {
+  try {
+    const algorithm = 'aes-256-cbc';
+    const key = crypto.scryptSync(password, 'salt', 32);
+    const iv = buffer.slice(0, 16);
+    const encryptedData = buffer.slice(16);
+    
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    let decrypted = decipher.update(encryptedData);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    
+    return decrypted.toString('utf-8');
+  } catch (error) {
+    throw new Error('Decryption failed');
+  }
+}

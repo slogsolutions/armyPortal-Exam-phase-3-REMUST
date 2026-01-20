@@ -1,5 +1,16 @@
 const router = require("express").Router();
-const { login } = require("../controllers/auth.controller");
+const ctrl = require("../controllers/auth.controller");
+const isAuth = require("../middlewares/isAuth");
 
-router.post("/login", login);
+/* ===== ADMIN LOGIN (PUBLIC) ===== */
+router.post("/login", ctrl.login);
+
+/* ===== VERIFY TOKEN (PROTECTED) ===== */
+router.get("/verify", isAuth(["ADMIN", "CANDIDATE"]), (req, res) => {
+  res.json({
+    success: true,
+    user: req.user
+  });
+});
+
 module.exports = router;

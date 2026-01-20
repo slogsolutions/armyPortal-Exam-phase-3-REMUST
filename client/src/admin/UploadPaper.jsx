@@ -19,6 +19,8 @@ export default function UploadPaper() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [password, setPassword] = useState("");
+  const [fileType, setFileType] = useState("excel");
 
   useEffect(() => {
     api.get("/admin/masters")
@@ -71,12 +73,19 @@ export default function UploadPaper() {
       return;
     }
 
+    if (fileType === 'dat' && !password) {
+      alert("Password is required for encrypted .dat files");
+      return;
+    }
+
     setUploading(true);
     setUploadResult(null);
 
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("password", password);
+      formData.append("fileType", fileType);
 
       const res = await api.post("/exam/bulk-upload", formData, {
         headers: {
@@ -101,7 +110,7 @@ export default function UploadPaper() {
     }
   };
 
-  const paperTypes = ["WP-I", "WP-II"]; // Only written papers - PR and ORAL are evaluated by Exam Officer
+  const paperTypes = ["WP-I", "WP-II", "WP-III"]; // Written papers - PR and ORAL are evaluated by Exam Officer
 
   return (
     <div className="upload-paper-page">
@@ -252,40 +261,67 @@ export default function UploadPaper() {
           </form>
         ) : (
           <form className="upload-form" onSubmit={handleBulkUpload}>
-            <h2>Bulk Excel Upload</h2>
+            <h2>Bulk Upload</h2>
+
+            <div className="form-group">
+              <label>File Type *</label>
+              <select
+                value={fileType}
+                onChange={(e) => setFileType(e.target.value)}
+                required
+              >
+                <option value="excel">Excel (.xlsx)</option>
+                <option value="csv">CSV (.csv)</option>
+                <option value="dat">Encrypted (.dat)</option>
+              </select>
+            </div>
+
+            {fileType === 'dat' && (
+              <div className="form-group">
+                <label>Password for .dat file *</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password for encrypted file"
+                  required
+                />
+              </div>
+            )}
 
             <div className="bulk-info">
-              <h3>Excel File Format</h3>
-              <p>Your Excel file should have the following columns:</p>
-              <ul>
-                <li><strong>Trade</strong> - Trade name (e.g., "JE NE REMUST", "OCC CL-II")</li>
-                <li><strong>PaperType</strong> - Paper type (e.g., "WP-I", "PR-I", "ORAL")</li>
-                <li><strong>Question</strong> - Question text</li>
-                <li><strong>OptionA</strong> - Option A text</li>
-                <li><strong>OptionB</strong> - Option B text</li>
-                <li><strong>OptionC</strong> - Option C text</li>
-                <li><strong>OptionD</strong> - Option D text</li>
-                <li><strong>CorrectAnswer</strong> - Correct answer (A, B, C, or D)</li>
-                <li><strong>Marks</strong> - Marks for the question (default: 1.0)</li>
-              </ul>
+              <h3>File Format</h3>
+              {fileType === 'excel' && (
+                <p>Excel file should have columns: Trade, PaperType, Question, OptionA, OptionB, OptionC, OptionD, CorrectAnswer, Marks</p>
+              )}
+              {fileType === 'csv' && (
+                <p>CSV file should have columns: Trade, PaperType, Question, OptionA, OptionB, OptionC, OptionD, CorrectAnswer, Marks</p>
+              )}
+              {fileType === 'dat' && (
+                <p>Encrypted .dat file containing JSON array of questions with the same structure as Excel/CSV</p>
+              )}
               <p className="note">
                 <strong>Note:</strong> The system will automatically create papers for trades if they don't exist.
-                Questions will be added in the order they appear in the Excel file.
+                Questions will be added in the order they appear in the file.
               </p>
             </div>
 
             <div className="form-group">
-              <label>Excel File (.xlsx) *</label>
+              <label>
+                {fileType === 'excel' && 'Excel File (.xlsx) *'}
+                {fileType === 'csv' && 'CSV File (.csv) *'}
+                {fileType === 'dat' && 'Encrypted File (.dat) *'}
+              </label>
               <input
                 type="file"
-                accept=".xlsx,.xls"
+                accept={fileType === 'excel' ? '.xlsx,.xls' : fileType === 'csv' ? '.csv' : '.dat'}
                 onChange={(e) => setFile(e.target.files[0])}
                 required
               />
             </div>
 
             <button type="submit" className="submit-btn" disabled={uploading || !file}>
-              {uploading ? "Uploading..." : "Upload Excel File"}
+              {uploading ? "Uploading..." : "Upload File"}
             </button>
           </form>
         )}

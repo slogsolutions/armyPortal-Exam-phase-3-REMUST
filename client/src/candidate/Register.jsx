@@ -3,11 +3,11 @@ import api from "../api/api";
 import "./Register.css";
 
 export default function Register() {
+
   const [masters, setMasters] = useState({
     ranks: [],
     trades: [],
-    commands: [],
-    centers: []
+    commands: []
   });
 
   const [form, setForm] = useState({
@@ -21,30 +21,46 @@ export default function Register() {
     medCat: "",
     corps: "",
     commandId: "",
-    centerId: "",
     selectedExamTypes: []
   });
 
   const [errors, setErrors] = useState({});
   const [selectedTrade, setSelectedTrade] = useState(null);
 
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
   /* ===== LOAD DROPDOWNS ===== */
   useEffect(() => {
     api.get("/admin/masters")
-      .then(res => setMasters(res.data))
-      .catch(() => alert("Failed to load dropdown data"));
+      .then(res => {
+        setMasters({
+          ranks: Array.isArray(res.data?.ranks) ? res.data.ranks : [],
+          trades: Array.isArray(res.data?.trades) ? res.data.trades : [],
+          commands: Array.isArray(res.data?.commands) ? res.data.commands : []
+        });
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoadError("Failed to load dropdown data. Please contact admin.");
+        setLoading(false);
+      });
   }, []);
 
   /* ===== HANDLE CHANGE ===== */
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
-    setErrors({ ...errors, [name]: "" });
 
-    // When trade is selected, fetch trade details to show exam types
+    setForm(prev => ({ ...prev, [name]: value }));
+    setErrors(prev => ({ ...prev, [name]: "" }));
+
     if (name === "tradeId" && value) {
-      const trade = masters.trades.find(t => t.id === Number(value));
+      const trade = Array.isArray(masters.trades)
+        ? masters.trades.find(t => t.id === Number(value))
+        : null;
+
       setSelectedTrade(trade || null);
+      setForm(prev => ({ ...prev, selectedExamTypes: [] }));
     }
   };
 
@@ -54,14 +70,15 @@ export default function Register() {
     const newTypes = currentTypes.includes(examType)
       ? currentTypes.filter(t => t !== examType)
       : [...currentTypes, examType];
-    
-    setForm({ ...form, selectedExamTypes: newTypes });
-    setErrors({ ...errors, selectedExamTypes: "" });
+
+    setForm(prev => ({ ...prev, selectedExamTypes: newTypes }));
+    setErrors(prev => ({ ...prev, selectedExamTypes: "" }));
   };
 
   /* ===== VALIDATION ===== */
   const validate = () => {
     const newErrors = {};
+
     Object.keys(form).forEach(key => {
       if (key === "selectedExamTypes") {
         if (!form[key] || form[key].length === 0) {
@@ -71,6 +88,7 @@ export default function Register() {
         newErrors[key] = "This field is required";
       }
     });
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -84,14 +102,35 @@ export default function Register() {
       const res = await api.post("/candidate/register", form);
       const candidateId = res.data.candidate.id;
       alert("Candidate Registered Successfully!");
-      // Store candidate ID in localStorage for now (later can use session/auth)
       localStorage.setItem("candidateId", candidateId);
-      // Redirect to instructions - will need to select paper type first
       window.location.href = "/instructions";
     } catch (err) {
       alert(err.response?.data?.error || "Registration failed");
     }
   };
+
+  /* ===== LOADING (NO BLANK SCREEN) ===== */
+  if (loading) {
+    return (
+      <div className="register-page">
+        <div className="form-card">
+          <h3>Loading registration form...</h3>
+        </div>
+      </div>
+    );
+  }
+
+  /* ===== API ERROR (NO BLANK SCREEN) ===== */
+  if (loadError) {
+    return (
+      <div className="register-page">
+        <div className="form-card">
+          <h2>Error</h2>
+          <p>{loadError}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="register-page">
@@ -108,21 +147,13 @@ export default function Register() {
           <div className="row">
             <div>
               <label>Army No (USERNAME) *</label>
-              <input
-                name="armyNo"
-                className={errors.armyNo ? "error" : ""}
-                onChange={handleChange}
-              />
+              <input name="armyNo" onChange={handleChange} />
               {errors.armyNo && <span>{errors.armyNo}</span>}
             </div>
 
             <div>
               <label>Rank *</label>
-              <select
-                name="rankId"
-                className={errors.rankId ? "error" : ""}
-                onChange={handleChange}
-              >
+              <select name="rankId" onChange={handleChange}>
                 <option value="">– Select Rank –</option>
                 {masters.ranks.map(r => (
                   <option key={r.id} value={r.id}>{r.name}</option>
@@ -132,25 +163,17 @@ export default function Register() {
             </div>
           </div>
 
-          {/* Name */}
+          {/* Name + Trade */}
           <div className="row">
             <div>
               <label>Name *</label>
-              <input
-                name="name"
-                className={errors.name ? "error" : ""}
-                onChange={handleChange}
-              />
+              <input name="name" onChange={handleChange} />
               {errors.name && <span>{errors.name}</span>}
             </div>
 
             <div>
               <label>Trade *</label>
-              <select
-                name="tradeId"
-                className={errors.tradeId ? "error" : ""}
-                onChange={handleChange}
-              >
+              <select name="tradeId" onChange={handleChange}>
                 <option value="">– Select Trade –</option>
                 {masters.trades.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
@@ -164,13 +187,13 @@ export default function Register() {
           <div className="row">
             <div>
               <label>Date of Birth *</label>
-              <input type="date" name="dob" className={errors.dob ? "error" : ""} onChange={handleChange} />
+              <input type="date" name="dob" onChange={handleChange} />
               {errors.dob && <span>{errors.dob}</span>}
             </div>
 
             <div>
               <label>Date of Enrollment *</label>
-              <input type="date" name="doe" className={errors.doe ? "error" : ""} onChange={handleChange} />
+              <input type="date" name="doe" onChange={handleChange} />
               {errors.doe && <span>{errors.doe}</span>}
             </div>
           </div>
@@ -179,13 +202,13 @@ export default function Register() {
           <div className="row">
             <div>
               <label>Unit *</label>
-              <input name="unit" className={errors.unit ? "error" : ""} onChange={handleChange} />
+              <input name="unit" onChange={handleChange} />
               {errors.unit && <span>{errors.unit}</span>}
             </div>
 
             <div>
               <label>Medical Category *</label>
-              <input name="medCat" className={errors.medCat ? "error" : ""} onChange={handleChange} />
+              <input name="medCat" onChange={handleChange} />
               {errors.medCat && <span>{errors.medCat}</span>}
             </div>
           </div>
@@ -193,11 +216,7 @@ export default function Register() {
           {/* Command */}
           <div>
             <label>Command *</label>
-            <select
-              name="commandId"
-              className={errors.commandId ? "error" : ""}
-              onChange={handleChange}
-            >
+            <select name="commandId" onChange={handleChange}>
               <option value="">– Select Command –</option>
               {masters.commands.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -206,64 +225,56 @@ export default function Register() {
             {errors.commandId && <span>{errors.commandId}</span>}
           </div>
 
-          {/* Command + Corps */}
+          {/* Corps */}
           <div className="row">
             <div>
               <label>Corps *</label>
-              <input name="corps" className={errors.corps ? "error" : ""} onChange={handleChange} />
+              <input name="corps" onChange={handleChange} />
               {errors.corps && <span>{errors.corps}</span>}
             </div>
           </div>
 
           <h4>Exam Details</h4>
 
-          {/* Conducting Center */}
-          <div>
-            <label>Conducting Center *</label>
-            <select
-              name="centerId"
-              className={errors.centerId ? "error" : ""}
-              onChange={handleChange}
-            >
-              <option value="">– Select Conducting Center –</option>
-              {masters.centers.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            {errors.centerId && <span>{errors.centerId}</span>}
-          </div>
-
-          {/* Exam Types - Select Written Papers (WP-I, WP-II) */}
+          {/* Exam Types */}
           {selectedTrade && (
             <div className="exam-types-section">
-              <label>Select Written Exam Types (Select all that apply) *</label>
-              <div className="exam-types-grid">
-                {selectedTrade.wp1 && (
-                  <label className="exam-type-checkbox">
-                    <input 
-                      type="checkbox" 
-                      checked={form.selectedExamTypes.includes("WP-I")}
-                      onChange={() => handleExamTypeChange("WP-I")}
-                    />
-                    <span>WP-I</span>
-                  </label>
-                )}
-                {selectedTrade.wp2 && (
-                  <label className="exam-type-checkbox">
-                    <input 
-                      type="checkbox" 
-                      checked={form.selectedExamTypes.includes("WP-II")}
-                      onChange={() => handleExamTypeChange("WP-II")}
-                    />
-                    <span>WP-II</span>
-                  </label>
-                )}
-              </div>
+              <label>Select Written Exam Types *</label>
+
+              {selectedTrade.wp1 && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.selectedExamTypes.includes("WP-I")}
+                    onChange={() => handleExamTypeChange("WP-I")}
+                  />
+                  WP-I
+                </label>
+              )}
+
+              {selectedTrade.wp2 && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.selectedExamTypes.includes("WP-II")}
+                    onChange={() => handleExamTypeChange("WP-II")}
+                  />
+                  WP-II
+                </label>
+              )}
+
+              {selectedTrade.wp3 && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={form.selectedExamTypes.includes("WP-III")}
+                    onChange={() => handleExamTypeChange("WP-III")}
+                  />
+                  WP-III
+                </label>
+              )}
+
               {errors.selectedExamTypes && <span>{errors.selectedExamTypes}</span>}
-              <p className="exam-types-note">
-                Note: Practical exams (PR-I to PR-V) and ORAL will be evaluated separately by exam officers.
-                You can only take written exams (WP-I, WP-II) online.
-              </p>
             </div>
           )}
 

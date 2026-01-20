@@ -5,7 +5,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "seed": "node prisma/seedComprehensiveNew.js",
+    "seed-trades": "node prisma/seedTrades.js",
+    "seed-simple": "node seedSimple.js",
+    "seed-admin": "node seedAdmin.js"
   },
   "keywords": [],
   "author": "",

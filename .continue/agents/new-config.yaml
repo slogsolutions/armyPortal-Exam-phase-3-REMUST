@@ -1,0 +1,28 @@
+name: Local Config
+version: 1.0.0
+schema: v1
+
+models:
+  - name: Qwen 2.5 Coder
+    provider: ollama
+    model: qwen2.5-coder:7b
+    roles:
+      - chat
+      - edit
+
+  - name: Llama 3
+    provider: ollama
+    model: llama3:latest
+    roles:
+      - chat
+
+# This uses your Llama 3 model for the "Index" so you can @Codebase
+embeddingsProvider:
+  provider: ollama
+  model: llama3:8b
+
+# This allows you to use the local context providers
+context:
+  - provider: code
+  - provider: codebase
+  - provider: terminal

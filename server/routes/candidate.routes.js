@@ -1,12 +1,17 @@
 const router = require("express").Router();
 const ctrl = require("../controllers/candidate.controller");
+const isAuth = require("../middlewares/isAuth");
 
+/* ===== CANDIDATE LOGIN (PUBLIC) ===== */
+router.post("/login", ctrl.login);
+
+/* ===== CANDIDATE REGISTRATION (PUBLIC) ===== */
 router.post("/register", ctrl.register);
 
-/* Get candidate by ID */
-router.get("/:candidateId", ctrl.getCandidateById);
+/* ===== GET CANDIDATE DATA (CANDIDATE ONLY) ===== */
+router.get("/:candidateId", isAuth(["CANDIDATE"]), ctrl.getCandidateById);
 
-/* Optional – for admin view */
-router.get("/all", ctrl.getAllCandidates);
+/* ===== GET ALL CANDIDATES (ADMIN ONLY) ===== */
+router.get("/", isAuth(["ADMIN"]), ctrl.getAllCandidates);
 
 module.exports = router;

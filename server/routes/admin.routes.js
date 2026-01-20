@@ -1,14 +1,32 @@
 const router = require("express").Router();
 const ctrl = require("../controllers/admin.controller");
-const adminAuth = require("../middlewares/adminAuth");
+const authCtrl = require("../controllers/auth.controller");
+const isAuth = require("../middlewares/isAuth");
 
-/* ===== ADD MASTER DATA (PROTECTED) ===== */
-router.post("/rank", adminAuth, ctrl.addRank);
-router.post("/trade", adminAuth, ctrl.addTrade);
-router.post("/command", adminAuth, ctrl.addCommand);
-router.post("/center", adminAuth, ctrl.addCenter);
+/* ===== ADMIN LOGIN (PUBLIC) ===== */
+router.post("/login", authCtrl.login);
 
-/* ===== GET DROPDOWN DATA (PROTECTED) ===== */
-router.get("/masters", adminAuth, ctrl.getMasters);
+/* ===== ADD MASTER DATA (ADMIN ONLY) ===== */
+router.post("/rank", isAuth(["ADMIN"]), ctrl.addRank);
+router.post("/trade", isAuth(["ADMIN"]), ctrl.addTrade);
+router.post("/command", isAuth(["ADMIN"]), ctrl.addCommand);
+// Center routes removed - using Commands only
+
+/* ===== UPDATE MASTER DATA (ADMIN ONLY) ===== */
+router.put("/trade/:id", isAuth(["ADMIN"]), ctrl.updateTrade);
+router.put("/command/:id", isAuth(["ADMIN"]), ctrl.updateCommand);
+// Center update route removed - using Commands only
+
+/* ===== DELETE MASTER DATA (ADMIN ONLY) ===== */
+router.delete("/trade/:id", isAuth(["ADMIN"]), ctrl.deleteTrade);
+router.delete("/command/:id", isAuth(["ADMIN"]), ctrl.deleteCommand);
+// Center delete route removed - using Commands only
+
+/* ===== GET DROPDOWN DATA (PUBLIC) ===== */
+router.get("/masters", ctrl.getMasters);
+router.get("/trades", ctrl.getTrades);
+
+/* ===== BULK OPERATIONS (ADMIN ONLY) ===== */
+router.post("/trades/bulk", isAuth(["ADMIN"]), ctrl.bulkConfigureTrades);
 
 module.exports = router;

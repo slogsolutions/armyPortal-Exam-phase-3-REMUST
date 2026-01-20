@@ -15,7 +15,6 @@ exports.register = async (req, res) => {
       rankId,
       tradeId,
       commandId,
-      centerId,
       selectedExamTypes
     } = req.body;
 
@@ -23,17 +22,17 @@ exports.register = async (req, res) => {
     if (!selectedExamTypes || !Array.isArray(selectedExamTypes) || selectedExamTypes.length === 0) {
       return res.status(400).json({
         success: false,
-        error: "Please select at least one written exam type (WP-I or WP-II)"
+        error: "Please select at least one exam type (WP-I, WP-II, or WP-III)"
       });
     }
 
-    // Only allow WP-I and WP-II
-    const validTypes = ["WP-I", "WP-II"];
-    const invalidTypes = selectedExamTypes.filter(t => !validTypes.includes(t));
+    // Validate exam types
+    const validExamTypes = ["WP-I", "WP-II", "WP-III"];
+    const invalidTypes = selectedExamTypes.filter(type => !validExamTypes.includes(type));
     if (invalidTypes.length > 0) {
       return res.status(400).json({
         success: false,
-        error: "Only WP-I and WP-II written exams can be selected"
+        error: `Invalid exam types: ${invalidTypes.join(", ")}`
       });
     }
 
@@ -49,8 +48,7 @@ exports.register = async (req, res) => {
         selectedExamTypes: JSON.stringify(selectedExamTypes),
         rankId: Number(rankId),
         tradeId: Number(tradeId),
-        commandId: Number(commandId),
-        centerId: Number(centerId)
+        commandId: Number(commandId)
       }
     });
 
@@ -66,6 +64,78 @@ exports.register = async (req, res) => {
   }
 };
 
+/* ================= LOGIN CANDIDATE ================= */
+
+exports.login = async (req, res) => {
+  try {
+    const { armyNo, dob } = req.body;
+
+    if (!armyNo || !dob) {
+      return res.status(400).json({
+        success: false,
+        error: "Army number and date of birth are required"
+      });
+    }
+
+    const candidate = await prisma.candidate.findUnique({
+      where: { armyNo },
+      include: {
+        rank: true,
+        trade: true,
+        command: true
+      }
+    });
+
+    if (!candidate) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid army number or date of birth"
+      });
+    }
+
+    // Verify date of birth (convert to YYYY-MM-DD format for comparison)
+    const candidateDob = new Date(candidate.dob).toISOString().split('T')[0];
+    const providedDob = new Date(dob).toISOString().split('T')[0];
+
+    if (candidateDob !== providedDob) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid army number or date of birth"
+      });
+    }
+
+    // Create a simple token for candidate
+    const jwt = require("jsonwebtoken");
+    const token = jwt.sign(
+      { 
+        id: candidate.id, 
+        armyNo: candidate.armyNo,
+        role: 'CANDIDATE'
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "8h" }
+    );
+
+    res.json({
+      success: true,
+      token,
+      candidate: {
+        id: candidate.id,
+        armyNo: candidate.armyNo,
+        name: candidate.name,
+        rank: candidate.rank,
+        trade: candidate.trade,
+        command: candidate.command
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: "Login failed"
+    });
+  }
+};
+
 /* ================= GET CANDIDATE BY ID ================= */
 
 exports.getCandidateById = async (req, res) => {
@@ -77,8 +147,7 @@ exports.getCandidateById = async (req, res) => {
       include: {
         rank: true,
         trade: true,
-        command: true,
-        center: true
+        command: true
       }
     });
 
@@ -100,8 +169,7 @@ exports.getAllCandidates = async (req, res) => {
       include: {
         rank: true,
         trade: true,
-        command: true,
-        center: true
+        command: true
       }
     });
 

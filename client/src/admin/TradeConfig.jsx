@@ -43,7 +43,7 @@ export default function TradeConfig() {
         />
       </label>
 
-      {["wp1","wp2","pr1","pr2","pr3","pr4","pr5","oral"].map(f => (
+      {["wp1","wp2","wp3","pr1","pr2","pr3","pr4","pr5","oral"].map(f => (
         <label key={f}>
           <input
             type="checkbox"
