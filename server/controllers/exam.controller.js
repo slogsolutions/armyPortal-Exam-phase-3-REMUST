@@ -304,10 +304,14 @@ exports.submitExam = async (req, res) => {
       });
     }
 
-    // Create answer records
-    await prisma.answer.createMany({
-      data: answerRecords
-    });
+    // Refresh answer records for this attempt
+    await prisma.answer.deleteMany({ where: { examAttemptId: attempt.id } });
+
+    if (answerRecords.length > 0) {
+      await prisma.answer.createMany({
+        data: answerRecords
+      });
+    }
 
     // Ensure score doesn't go below 0
     score = Math.max(0, score);
@@ -337,7 +341,9 @@ exports.submitExam = async (req, res) => {
       totalMarks,
       percentage: parseFloat(percentage.toFixed(2)), 
       status,
-      attemptId: updatedAttempt.id
+      attemptId: updatedAttempt.id,
+      answers: answerRecords,
+      submittedAt: updatedAttempt.submittedAt
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

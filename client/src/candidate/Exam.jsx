@@ -16,6 +16,7 @@ export default function Exam() {
   const [attemptId, setAttemptId] = useState(null);
   const [examFinished, setExamFinished] = useState(false);
   const [showFocusModal, setShowFocusModal] = useState(false);
+  const [fullscreenActive, setFullscreenActive] = useState(false);
   const intervalRef = useRef(null);
   const startTimeRef = useRef(null);
 
@@ -52,10 +53,20 @@ export default function Exam() {
         }
 
         const attemptRes = await api.post("/exam/start", startPayload);
-        
+
         setAttemptId(attemptRes.data.id);
         startTimeRef.current = new Date();
         setExamStarted(true);
+
+        if (!document.fullscreenElement) {
+          try {
+            await document.documentElement.requestFullscreen?.();
+          } catch (err) {
+            console.warn("Unable to enter fullscreen on start", err);
+          }
+        }
+
+        setFullscreenActive(Boolean(document.fullscreenElement));
       } catch (error) {
         console.error("Error loading paper:", error);
         const message = error.response?.data?.error || "Failed to load exam paper";
@@ -106,7 +117,9 @@ export default function Exam() {
       // Block Alt+Tab, Ctrl+Tab, Cmd+Tab
       if ((e.altKey || e.ctrlKey || e.metaKey) && e.key === "Tab") {
         e.preventDefault();
-        alert("Tab switching is not allowed during the exam!");
+        if (!examFinished) {
+          handleTerminateExam();
+        }
         return false;
       }
 
@@ -147,9 +160,33 @@ export default function Exam() {
     };
 
     const handleFocusWarning = () => {
-      if (examFinished || showFocusModal) return;
-      if (document.hidden || document.hasFocus() === false) {
-        setShowFocusModal(true);
+      if (examFinished) return;
+
+      const isFullscreen = Boolean(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+
+      setFullscreenActive(isFullscreen);
+
+      if (document.hidden) {
+        handleTerminateExam();
+        return;
+      }
+
+      if (!isFullscreen) {
+        if (!examFinished && !showFocusModal) {
+          setShowFocusModal(true);
+        }
+        return;
+      }
+
+      if (!document.hasFocus()) {
+        if (!showFocusModal) {
+          setShowFocusModal(true);
+        }
       }
     };
 
@@ -159,6 +196,10 @@ export default function Exam() {
       window.addEventListener("beforeunload", handleBeforeUnload);
       document.addEventListener("visibilitychange", handleFocusWarning);
       window.addEventListener("blur", handleFocusWarning);
+      document.addEventListener("fullscreenchange", handleFocusWarning);
+      document.addEventListener("webkitfullscreenchange", handleFocusWarning);
+      document.addEventListener("mozfullscreenchange", handleFocusWarning);
+      document.addEventListener("MSFullscreenChange", handleFocusWarning);
     };
 
     const unregisterListeners = () => {
@@ -167,31 +208,17 @@ export default function Exam() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleFocusWarning);
       window.removeEventListener("blur", handleFocusWarning);
+      document.removeEventListener("fullscreenchange", handleFocusWarning);
+      document.removeEventListener("webkitfullscreenchange", handleFocusWarning);
+      document.removeEventListener("mozfullscreenchange", handleFocusWarning);
+      document.removeEventListener("MSFullscreenChange", handleFocusWarning);
     };
 
     registerListeners();
 
     // Check fullscreen
-    const checkFullscreen = () => {
-      const isFullscreen = 
-        document.fullscreenElement || 
-        document.webkitFullscreenElement || 
-        document.mozFullScreenElement || 
-        document.msFullscreenElement;
-
-      if (!isFullscreen && examStarted) {
-        alert("You must remain in fullscreen mode. Returning to fullscreen...");
-        document.documentElement.requestFullscreen().catch(() => {
-          alert("Please enable fullscreen to continue the exam.");
-        });
-      }
-    };
-
-    const fullscreenInterval = setInterval(checkFullscreen, 1000);
-
     return () => {
       unregisterListeners();
-      clearInterval(fullscreenInterval);
     };
   }, [examStarted, examFinished, showFocusModal]);
 
@@ -241,7 +268,13 @@ export default function Exam() {
 
       setExamFinished(true);
       setShowFocusModal(false);
-      document.exitFullscreen?.();
+      if (document.fullscreenElement) {
+        try {
+          await document.exitFullscreen?.();
+        } catch (err) {
+          console.warn("Unable to exit fullscreen", err);
+        }
+      }
       navigate(`/candidate/result?candidateId=${candidateId}`);
       return true;
     } catch (error) {
@@ -264,10 +297,12 @@ export default function Exam() {
 
   const handleResumeExam = async () => {
     setShowFocusModal(false);
-    try {
-      await document.documentElement.requestFullscreen?.();
-    } catch (err) {
-      console.warn("Unable to re-enter fullscreen", err);
+    if (!fullscreenActive) {
+      try {
+        await document.documentElement.requestFullscreen?.();
+      } catch (err) {
+        console.warn("Unable to re-enter fullscreen", err);
+      }
     }
   };
 
@@ -288,13 +323,18 @@ export default function Exam() {
   const answeredCount = Object.keys(answers).length;
   const totalQuestions = paper.questions.length;
 
+  const focusTitle = fullscreenActive ? "Warning: Window focus lost!" : "Fullscreen required";
+  const focusMessage = fullscreenActive
+    ? "Please return to the exam window. Leaving the exam may lead to termination."
+    : "This assessment must stay in fullscreen. Return now or the attempt will be submitted.";
+
   return (
     <>
       {showFocusModal && !examFinished && (
         <div className="focus-overlay">
           <div className="focus-modal">
-            <h3>Warning: Window focus lost!</h3>
-            <p>Please return to the exam window. Leaving the exam may lead to termination.</p>
+            <h3>{focusTitle}</h3>
+            <p>{focusMessage}</p>
             <div className="focus-actions">
               <button className="resume-btn" onClick={handleResumeExam}>
                 Return to Exam

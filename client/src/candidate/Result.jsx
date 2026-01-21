@@ -12,7 +12,7 @@ export default function Result() {
   useEffect(() => {
     const loadResult = async () => {
       try {
-        const res = await api.get(`/result/${candidateId}`);
+        const res = await api.get(`/result/candidate/${candidateId}`);
         setData(res.data);
       } catch (error) {
         console.error("Error loading result:", error);
@@ -66,31 +66,31 @@ export default function Result() {
               </div>
               <div className="detail-item">
                 <label>Rank:</label>
-                <span>{candidate.rank}</span>
+                <span>{candidate.rank || "-"}</span>
               </div>
               <div className="detail-item">
                 <label>Trade:</label>
-                <span>{candidate.trade}</span>
+                <span>{candidate.trade || "-"}</span>
               </div>
               <div className="detail-item">
                 <label>Unit:</label>
-                <span>{candidate.unit}</span>
+                <span>{candidate.unit || "-"}</span>
               </div>
               <div className="detail-item">
                 <label>Medical Category:</label>
-                <span>{candidate.medCat}</span>
+                <span>{candidate.medCat || "-"}</span>
               </div>
               <div className="detail-item">
                 <label>Corps:</label>
-                <span>{candidate.corps}</span>
+                <span>{candidate.corps || "-"}</span>
               </div>
               <div className="detail-item">
                 <label>Command:</label>
-                <span>{candidate.command}</span>
+                <span>{candidate.command || "-"}</span>
               </div>
               <div className="detail-item">
                 <label>Conducting Center:</label>
-                <span>{candidate.center}</span>
+                <span>{candidate.center || "-"}</span>
               </div>
             </div>
           </section>
