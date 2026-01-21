@@ -1,10 +1,14 @@
 const router = require("express").Router();
 const ctrl = require("../controllers/admin.controller");
+const candidateCtrl = require("../controllers/candidate.controller");
 const authCtrl = require("../controllers/auth.controller");
 const isAuth = require("../middlewares/isAuth");
 
 /* ===== ADMIN LOGIN (PUBLIC) ===== */
 router.post("/login", authCtrl.login);
+
+/* ===== CANDIDATE REGISTRATION (ADMIN ONLY) ===== */
+router.post("/register-candidate", isAuth(["ADMIN"]), candidateCtrl.register);
 
 /* ===== ADD MASTER DATA (ADMIN ONLY) ===== */
 router.post("/rank", isAuth(["ADMIN"]), ctrl.addRank);

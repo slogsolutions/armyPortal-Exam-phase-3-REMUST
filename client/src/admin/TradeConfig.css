@@ -1,0 +1,249 @@
+.trade-config-page {
+  padding: 2rem;
+  background: #ffffff;
+  min-height: 100%;
+  color: #000000;
+}
+
+.config-layout {
+  display: flex;
+  gap: 2rem;
+  height: 100%;
+}
+
+.trades-list {
+  flex: 0 0 300px;
+  background: #f8fafb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.trades-list h3 {
+  color: #000000;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trade-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.trade-card {
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.trade-card:hover {
+  border-color: #2d5016;
+  box-shadow: 0 2px 8px rgba(45, 80, 22, 0.1);
+  transform: translateY(-1px);
+}
+
+.trade-card.selected {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+}
+
+.trade-card h4 {
+  color: #000000;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.trade-card p {
+  color: #000000;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.config-panel {
+  flex: 1;
+  background: #f8fafb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 1px solid #e5e7eb;
+  overflow-y: auto;
+}
+
+.config-panel h3 {
+  color: #000000;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 1.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.config-section {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.config-section h4 {
+  color: #000000;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.exam-types {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #000000;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.checkbox-label:hover {
+  background: rgba(45, 80, 22, 0.05);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.marking-config {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.marking-config label {
+  color: #000000;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.marking-config input[type="number"] {
+  width: 100px;
+  padding: 0.5rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: #ffffff;
+}
+
+.marking-config input[type="number"]:focus {
+  outline: none;
+  border-color: #2d5016;
+  box-shadow: 0 0 0 3px rgba(45, 80, 22, 0.1);
+}
+
+.save-section {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.save-btn {
+  background: #2d5016;
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.save-btn:hover {
+  background: #1a1a2e;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(45, 80, 22, 0.2);
+}
+
+.no-selection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3rem;
+}
+
+.no-selection h3 {
+  color: #000000;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.no-selection p {
+  color: #000000;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .config-layout {
+    flex-direction: column;
+  }
+  
+  .trades-list {
+    flex: 0 0 auto;
+    max-height: 300px;
+  }
+  
+  .trade-cards {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .trade-card {
+    flex: 1 0 calc(50% - 0.5rem);
+    min-width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .config-layout {
+    gap: 1rem;
+  }
+  
+  .trades-list {
+    padding: 1rem;
+  }
+  
+  .config-panel {
+    padding: 1rem;
+  }
+  
+  .trade-card {
+    flex: 1 0 100%;
+    min-width: auto;
+  }
+}

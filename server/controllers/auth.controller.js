@@ -5,18 +5,26 @@ require("dotenv").config();
 
 exports.login = async (req, res) => {
   try {
+    console.log('🔐 Admin login attempt:', req.body);
+    
     const { username, password } = req.body;
 
-    if (!username || !password)
+    if (!username || !password) {
+      console.log('❌ Missing credentials');
       return res.status(400).json({ msg: "Username and password required" });
+    }
 
     const admin = await prisma.admin.findUnique({ where: { username } });
-    if (!admin)
+    if (!admin) {
+      console.log('❌ Admin not found:', username);
       return res.status(401).json({ msg: "Invalid username or password" });
+    }
 
     const valid = await bcrypt.compare(password, admin.password);
-    if (!valid)
+    if (!valid) {
+      console.log('❌ Invalid password for:', username);
       return res.status(401).json({ msg: "Invalid username or password" });
+    }
 
     const token = jwt.sign(
       { id: admin.id, role: admin.role },
@@ -24,6 +32,7 @@ exports.login = async (req, res) => {
       { expiresIn: "8h" }
     );
 
+    console.log('✅ Admin login successful:', username);
     res.json({
       token,
       admin: {
@@ -33,7 +42,7 @@ exports.login = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err);
+    console.error('💥 Admin login error:', err);
     res.status(500).json({ msg: "Login failed" });
   }
 };

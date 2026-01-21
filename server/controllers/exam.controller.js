@@ -281,6 +281,7 @@ exports.submitExam = async (req, res) => {
  */
 exports.uploadPaper = async (req, res) => {
   try {
+    console.log("📝 Single upload payload:", req.body);
     const { tradeId, paperType, questionText, optionA, optionB, optionC, optionD, correctAnswer, marks } = req.body;
 
     // Find or create exam paper
@@ -289,6 +290,7 @@ exports.uploadPaper = async (req, res) => {
     });
 
     if (!paper) {
+      console.log("📄 No existing paper found. Creating new exam paper", { tradeId, paperType });
       paper = await prisma.examPaper.create({
         data: {
           tradeId: Number(tradeId),
@@ -318,8 +320,10 @@ exports.uploadPaper = async (req, res) => {
       }
     });
 
+    console.log("🆕 Created question", { questionId: question.id, paperId: paper.id, order: question.questionOrder });
     res.json({ success: true, question, paper });
   } catch (error) {
+    console.error("❌ Single upload failed:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -329,6 +333,12 @@ exports.uploadPaper = async (req, res) => {
  */
 exports.bulkUploadPapers = async (req, res) => {
   try {
+    console.log('📁 Bulk upload attempt:', { 
+      file: req.file?.originalname, 
+      fileType: req.body.fileType,
+      hasPassword: !!req.body.password 
+    });
+    
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
@@ -344,10 +354,22 @@ exports.bulkUploadPapers = async (req, res) => {
       }
       
       try {
-        const decryptedData = decryptDatFile(req.file.buffer, password);
-        data = JSON.parse(decryptedData);
+        console.log('🔐 Attempting to decrypt .dat file...');
+        const decryptedBuffer = decryptDatFile(req.file.buffer, password);
+        console.log('✅ Decryption successful, parsing Excel...');
+        
+        // Parse the decrypted Excel file
+        const workbook = XLSX.read(decryptedBuffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        data = XLSX.utils.sheet_to_json(worksheet);
+        console.log('✅ Excel parsed successfully, items:', data.length);
       } catch (decryptError) {
-        return res.status(400).json({ error: "Invalid password or corrupted .dat file" });
+        console.error('💥 Decryption error:', decryptError.message);
+        return res.status(400).json({ 
+          error: "Invalid password or corrupted .dat file",
+          details: decryptError.message 
+        });
       }
     } else if (req.file.originalname.endsWith('.csv')) {
       // Handle CSV file
@@ -376,6 +398,64 @@ exports.bulkUploadPapers = async (req, res) => {
     const results = [];
     const errors = [];
 
+    // Cache trades to support case-insensitive matching without Prisma mode option
+    const tradeRecords = await prisma.trade.findMany({
+      select: {
+        id: true,
+        name: true,
+        wp1: true,
+        wp2: true,
+        wp3: true,
+        pr1: true,
+        pr2: true,
+        pr3: true,
+        pr4: true,
+        pr5: true,
+        oral: true
+      }
+    });
+
+    const sanitize = (value = "") => value.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    const digitsToRoman = (value = "") => value.toString().replace(/1/g, "I").replace(/2/g, "II").replace(/3/g, "III").replace(/4/g, "IV").replace(/5/g, "V");
+    const romanToDigits = (value = "") => {
+      let result = value.toString();
+      const replacements = [
+        ["III", "3"],
+        ["II", "2"],
+        ["IV", "4"],
+        ["V", "5"],
+        ["I", "1"]
+      ];
+      replacements.forEach(([roman, digit]) => {
+        result = result.replace(new RegExp(roman, "gi"), digit);
+      });
+      return result;
+    };
+
+    const tradeByExactName = new Map();
+    const tradeByLowerName = new Map();
+    const tradeBySanitized = new Map();
+    for (const trade of tradeRecords) {
+      tradeByExactName.set(trade.name, trade);
+      tradeByLowerName.set(trade.name.toLowerCase(), trade);
+      const sanitizedName = sanitize(trade.name);
+      tradeBySanitized.set(sanitizedName, trade);
+
+      const romanVariant = digitsToRoman(trade.name);
+      const digitVariant = romanToDigits(trade.name);
+
+      const sanitizedRomanVariant = sanitize(romanVariant);
+      const sanitizedDigitVariant = sanitize(digitVariant);
+
+      if (!tradeBySanitized.has(sanitizedRomanVariant)) {
+        tradeBySanitized.set(sanitizedRomanVariant, trade);
+      }
+      if (!tradeBySanitized.has(sanitizedDigitVariant)) {
+        tradeBySanitized.set(sanitizedDigitVariant, trade);
+      }
+    }
+
     for (let row of data) {
       try {
         // Expected columns: Trade, PaperType, Question, OptionA, OptionB, OptionC, OptionD, CorrectAnswer, Marks
@@ -401,9 +481,44 @@ exports.bulkUploadPapers = async (req, res) => {
           continue;
         }
 
-        // Find trade
-        const trade = await prisma.trade.findFirst({
-          where: { name: { contains: tradeName, mode: 'insensitive' } }
+        const normalizedTradeName = (tradeName || "").trim();
+        const tradeLower = normalizedTradeName.toLowerCase();
+        const normalizedRoman = digitsToRoman(normalizedTradeName);
+        const normalizedDigits = romanToDigits(normalizedTradeName);
+
+        // Find trade from cached list (case-insensitive)
+        let trade = normalizedTradeName
+          ? tradeByExactName.get(normalizedTradeName)
+              || tradeByLowerName.get(tradeLower)
+              || tradeBySanitized.get(sanitize(normalizedTradeName))
+              || tradeBySanitized.get(sanitize(normalizedRoman))
+              || tradeBySanitized.get(sanitize(normalizedDigits))
+          : null;
+
+        if (!trade && normalizedTradeName) {
+          trade = tradeRecords.find((record) => {
+            const recordLower = record.name.toLowerCase();
+            const recordSanitized = sanitize(record.name);
+            const recordRomanSanitized = sanitize(digitsToRoman(record.name));
+            const recordDigitSanitized = sanitize(romanToDigits(record.name));
+            const normalizedSanitized = sanitize(normalizedTradeName);
+            const normalizedRomanSanitized = sanitize(normalizedRoman);
+            const normalizedDigitSanitized = sanitize(normalizedDigits);
+            return (
+              recordLower.includes(tradeLower)
+              || recordSanitized.includes(normalizedSanitized)
+              || recordRomanSanitized.includes(normalizedRomanSanitized)
+              || recordDigitSanitized.includes(normalizedDigitSanitized)
+            );
+          }) || null;
+        }
+
+        console.log("🔍 Row lookup", {
+          tradeName,
+          matchedTradeId: trade?.id,
+          paperType,
+          marks,
+          hasQuestion: Boolean(questionText)
         });
 
         if (!trade) {
@@ -425,9 +540,13 @@ exports.bulkUploadPapers = async (req, res) => {
         };
 
         const tradeField = paperTypeMap[paperType];
-        if (tradeField && !trade[tradeField]) {
-          errors.push({ row, error: `${paperType} is not enabled for trade ${trade.name}` });
-          continue;
+        if (tradeField) {
+          const fieldEnabled = Boolean(trade[tradeField]);
+          console.log("📑 Trade paper toggle", { tradeId: trade.id, tradeName: trade.name, paperType, tradeField, fieldEnabled });
+          if (!fieldEnabled) {
+            errors.push({ row, error: `${paperType} is not enabled for trade ${trade.name}` });
+            continue;
+          }
         }
 
         // Find or create paper (only for written exams)
@@ -438,6 +557,7 @@ exports.bulkUploadPapers = async (req, res) => {
           });
 
           if (!paper) {
+            console.log("📄 Creating exam paper during bulk upload", { tradeId: trade.id, paperType });
             paper = await prisma.examPaper.create({
               data: {
                 tradeId: trade.id,
@@ -475,20 +595,47 @@ exports.bulkUploadPapers = async (req, res) => {
             }
           });
 
+          console.log("✅ Created question", {
+            tradeId: trade.id,
+            paperType,
+            questionId: question.id,
+            order: question.questionOrder
+          });
           results.push({ trade: tradeName, paperType, questionId: question.id });
         }
       } catch (err) {
+        console.error("❌ Row processing failed", { row, error: err.message });
         errors.push({ row, error: err.message });
       }
     }
 
-    res.json({
-      success: true,
-      uploaded: results.length,
-      errors: errors.length,
-      results,
-      errors: errors.slice(0, 10) // Return first 10 errors
+    console.log("📊 Bulk upload summary", {
+      totalRows: data.length,
+      created: results.length,
+      errors: errors.length
     });
+
+    const responsePayload = {
+      success: results.length > 0 && errors.length === 0,
+      uploaded: results.length,
+      errorCount: errors.length,
+      results,
+      errorSamples: errors.slice(0, 10)
+    };
+
+    if (results.length === 0) {
+      responsePayload.success = false;
+      responsePayload.message = "No questions were created. See errorSamples for details.";
+      return res.status(400).json(responsePayload);
+    }
+
+    if (errors.length > 0) {
+      responsePayload.message = `Uploaded ${results.length} questions with ${errors.length} errors.`;
+      return res.status(207).json(responsePayload);
+    }
+
+    responsePayload.message = "All questions uploaded successfully.";
+    res.json(responsePayload);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -523,21 +670,65 @@ function normalizePaperType(paperType) {
 }
 
 /**
- * Helper function to decrypt .dat files
+ * Helper function to decrypt .dat files (compatible with Django AES-256-GCM)
  */
 function decryptDatFile(buffer, password) {
   try {
-    const algorithm = 'aes-256-cbc';
-    const key = crypto.scryptSync(password, 'salt', 32);
-    const iv = buffer.slice(0, 16);
-    const encryptedData = buffer.slice(16);
+    console.log('🔐 Starting decryption with buffer size:', buffer.length);
+    console.log('🔑 Password provided:', password ? 'YES' : 'NO');
     
-    const decipher = crypto.createDecipheriv(algorithm, key, iv);
-    let decrypted = decipher.update(encryptedData);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    const SALT_SIZE = 16;
+    const IV_SIZE = 12;
+    const PBKDF2_ITERATIONS = 100000;
+    const KEY_LENGTH = 32; // AES-256
     
-    return decrypted.toString('utf-8');
+    if (buffer.length < SALT_SIZE + IV_SIZE + 16) {
+      throw new Error('File too short to be a valid encrypted .dat');
+    }
+    
+    const salt = buffer.subarray(0, SALT_SIZE);
+    const iv = buffer.subarray(SALT_SIZE, SALT_SIZE + IV_SIZE);
+    const ciphertextWithTag = buffer.subarray(SALT_SIZE + IV_SIZE);
+    const authTag = ciphertextWithTag.subarray(-16); // last 16 bytes
+    const ciphertext = ciphertextWithTag.subarray(0, ciphertextWithTag.length - 16);
+    
+    console.log('📦 Salt, IV, and auth tag extracted');
+    console.log('🔑 Salt (hex):', salt.toString('hex'));
+    console.log('🔑 IV (hex):', iv.toString('hex'));
+    console.log('🔑 Auth tag (hex):', authTag.toString('hex'));
+    console.log('🔑 Deriving key with PBKDF2...');
+    
+    // Derive key using PBKDF2-HMAC-SHA256 (same as Django)
+    const key = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
+    
+    console.log('🔑 Key derived successfully, decrypting...');
+    console.log('🔑 Key (first 8 bytes):', key.subarray(0, 8).toString('hex'));
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    
+    let decrypted;
+    try {
+      decrypted = decipher.update(ciphertext);
+      decrypted = Buffer.concat([decrypted, decipher.final()]);
+    } catch (authError) {
+      console.error('💥 Authentication failed:', authError.message);
+      throw new Error('Authentication failed - wrong password or corrupted file');
+    }
+    
+    // Sanity check: should start with 'PK' (Excel signature)
+    const signature = decrypted.subarray(0, 2).toString('binary');
+    if (!signature.startsWith('PK')) {
+      console.error('💥 Invalid signature:', signature);
+      throw new Error(`Decryption failed or wrong password. Expected 'PK' signature, got: ${signature}`);
+    }
+    
+    console.log('✅ Decryption complete, result length:', decrypted.length);
+    console.log('✅ Excel signature verified: PK');
+    
+    return decrypted; // Return Buffer for Excel parsing
   } catch (error) {
-    throw new Error('Decryption failed');
+    console.error('💥 Decryption failed:', error.message);
+    throw new Error(`Decryption failed: ${error.message}`);
   }
 }

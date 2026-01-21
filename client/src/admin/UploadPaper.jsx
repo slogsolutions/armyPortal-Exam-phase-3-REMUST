@@ -4,7 +4,7 @@ import "./UploadPaper.css";
 
 export default function UploadPaper() {
   const [masters, setMasters] = useState({ trades: [] });
-  const [uploadMode, setUploadMode] = useState("single"); // "single" or "bulk"
+  const [uploadMode, setUploadMode] = useState("single");
   const [form, setForm] = useState({
     tradeId: "",
     paperType: "",
@@ -20,7 +20,6 @@ export default function UploadPaper() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [password, setPassword] = useState("");
-  const [fileType, setFileType] = useState("excel");
 
   useEffect(() => {
     api.get("/admin/masters")
@@ -28,317 +27,292 @@ export default function UploadPaper() {
       .catch(() => alert("Failed to load trades"));
   }, []);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleSingleUpload = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
     setUploadResult(null);
 
     try {
-      const res = await api.post("/exam/upload-paper", form);
-      setUploadResult({
-        success: true,
-        message: "Question uploaded successfully!",
-        data: res.data
-      });
-      // Reset form
-      setForm({
-        tradeId: form.tradeId,
-        paperType: form.paperType,
-        questionText: "",
-        optionA: "",
-        optionB: "",
-        optionC: "",
-        optionD: "",
-        correctAnswer: "",
-        marks: "1.0"
-      });
-    } catch (error) {
-      setUploadResult({
-        success: false,
-        message: error.response?.data?.error || "Upload failed"
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
+      const endpoint = uploadMode === "single" ? "/exam/upload-paper" : "/exam/bulk-upload";
+      let res;
 
-  const handleBulkUpload = async (e) => {
-    e.preventDefault();
-    if (!file) {
-      alert("Please select a file");
-      return;
-    }
+      if (uploadMode === "single") {
+        const payload = {
+          tradeId: Number(form.tradeId),
+          paperType: form.paperType.trim().toUpperCase(),
+          questionText: form.questionText,
+          optionA: form.optionA,
+          optionB: form.optionB,
+          optionC: form.optionC,
+          optionD: form.optionD,
+          correctAnswer: form.correctAnswer,
+          marks: parseFloat(form.marks)
+        };
 
-    if (fileType === 'dat' && !password) {
-      alert("Password is required for encrypted .dat files");
-      return;
-    }
-
-    setUploading(true);
-    setUploadResult(null);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("password", password);
-      formData.append("fileType", fileType);
-
-      const res = await api.post("/exam/bulk-upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data"
+        res = await api.post(endpoint, payload);
+      } else {
+        if (!file) {
+          throw new Error("Please select a file to upload");
         }
-      });
 
-      setUploadResult({
-        success: true,
-        message: `Successfully uploaded ${res.data.uploaded} questions!`,
-        errors: res.data.errors,
-        uploaded: res.data.uploaded,
-        totalErrors: res.data.errors
-      });
-    } catch (error) {
-      setUploadResult({
-        success: false,
-        message: error.response?.data?.error || "Bulk upload failed"
-      });
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const fileExtension = file.name.split(".").pop();
+        if (fileExtension) {
+          formData.append("fileType", fileExtension.toLowerCase());
+        }
+        if (password) {
+          formData.append("password", password);
+        }
+
+        res = await api.post(endpoint, formData);
+      }
+      setUploadResult(res.data);
+      
+      if (res.data.success) {
+        setForm({
+          tradeId: "",
+          paperType: "",
+          questionText: "",
+          optionA: "",
+          optionB: "",
+          optionC: "",
+          optionD: "",
+          correctAnswer: "",
+          marks: "1.0"
+        });
+        setFile(null);
+        setPassword("");
+      }
+    } catch (err) {
+      console.error("Upload failed:", err);
+      setUploadResult({ success: false, error: err.response?.data?.error || err.message || "Upload failed" });
     } finally {
       setUploading(false);
     }
   };
 
-  const paperTypes = ["WP-I", "WP-II", "WP-III"]; // Written papers - PR and ORAL are evaluated by Exam Officer
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setPassword("");
+    }
+  };
 
   return (
     <div className="upload-paper-page">
-      <div className="upload-container">
-        <h1>Upload Exam Paper</h1>
+      <div className="upload-header">
+        <h2>Upload Question Papers</h2>
+      </div>
 
-        <div className="upload-mode-selector">
-          <button
-            className={`mode-btn ${uploadMode === "single" ? "active" : ""}`}
-            onClick={() => setUploadMode("single")}
-          >
-            Single Question Upload
-          </button>
-          <button
-            className={`mode-btn ${uploadMode === "bulk" ? "active" : ""}`}
-            onClick={() => setUploadMode("bulk")}
-          >
-            Bulk Excel Upload
-          </button>
-        </div>
+      <div className="upload-mode-selector">
+        <label>
+          <input
+            type="radio"
+            name="uploadMode"
+            value="single"
+            checked={uploadMode === "single"}
+            onChange={(e) => setUploadMode(e.target.value)}
+          />
+          Single Question
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="uploadMode"
+            value="bulk"
+            checked={uploadMode === "bulk"}
+            onChange={(e) => setUploadMode(e.target.value)}
+          />
+          Bulk Upload (Excel/CSV)
+        </label>
+      </div>
 
+      <form onSubmit={handleSubmit}>
         {uploadMode === "single" ? (
-          <form className="upload-form" onSubmit={handleSingleUpload}>
-            <h2>Single Question Upload</h2>
+          <div className="upload-form">
+            <div className="form-section">
+              <h3>Single Question Upload</h3>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Trade *</label>
+                  <select
+                    value={form.tradeId}
+                    onChange={(e) => setForm(prev => ({ ...prev, tradeId: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select Trade</option>
+                    {masters.trades.map(trade => (
+                      <option key={trade.id} value={trade.id}>
+                        {trade.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Trade *</label>
-                <select
-                  name="tradeId"
-                  value={form.tradeId}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">– Select Trade –</option>
-                  {masters.trades.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                <div className="form-group">
+                  <label>Paper Type *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., WP-I, WP-II, PR-I"
+                    value={form.paperType}
+                    onChange={(e) => setForm(prev => ({ ...prev, paperType: e.target.value }))}
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label>Paper Type *</label>
-                <select
-                  name="paperType"
-                  value={form.paperType}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">– Select Paper Type –</option>
-                  {paperTypes.map(pt => (
-                    <option key={pt} value={pt}>{pt}</option>
-                  ))}
-                </select>
+              <div className="form-row">
+                <div className="form-group full-width">
+                  <label>Question Text *</label>
+                  <textarea
+                    placeholder="Enter the question text"
+                    value={form.questionText}
+                    onChange={(e) => setForm(prev => ({ ...prev, questionText: e.target.value }))}
+                    required
+                    rows="4"
+                  />
+                </div>
               </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Option A</label>
+                  <input
+                    type="text"
+                    placeholder="Option A text"
+                    value={form.optionA}
+                    onChange={(e) => setForm(prev => ({ ...prev, optionA: e.target.value }))}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Option B</label>
+                  <input
+                    type="text"
+                    placeholder="Option B text"
+                    value={form.optionB}
+                    onChange={(e) => setForm(prev => ({ ...prev, optionB: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Option C</label>
+                  <input
+                    type="text"
+                    placeholder="Option C text"
+                    value={form.optionC}
+                    onChange={(e) => setForm(prev => ({ ...prev, optionC: e.target.value }))}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Option D</label>
+                  <input
+                    type="text"
+                    placeholder="Option D text"
+                    value={form.optionD}
+                    onChange={(e) => setForm(prev => ({ ...prev, optionD: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Correct Answer</label>
+                  <select
+                    value={form.correctAnswer}
+                    onChange={(e) => setForm(prev => ({ ...prev, correctAnswer: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select Correct Answer</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Marks</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    value={form.marks}
+                    onChange={(e) => setForm(prev => ({ ...prev, marks: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+
+              <button type="submit" disabled={uploading}>
+                {uploading ? "Uploading..." : "Upload Question"}
+              </button>
             </div>
-
-            <div className="form-group">
-              <label>Question Text *</label>
-              <textarea
-                name="questionText"
-                value={form.questionText}
-                onChange={handleChange}
-                rows="4"
-                required
-              />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Option A *</label>
-                <input
-                  type="text"
-                  name="optionA"
-                  value={form.optionA}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Option B *</label>
-                <input
-                  type="text"
-                  name="optionB"
-                  value={form.optionB}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Option C *</label>
-                <input
-                  type="text"
-                  name="optionC"
-                  value={form.optionC}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Option D *</label>
-                <input
-                  type="text"
-                  name="optionD"
-                  value={form.optionD}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Correct Answer (A/B/C/D) *</label>
-                <select
-                  name="correctAnswer"
-                  value={form.correctAnswer}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">– Select Correct Answer –</option>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                  <option value="D">D</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Marks *</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  name="marks"
-                  value={form.marks}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <button type="submit" className="submit-btn" disabled={uploading}>
-              {uploading ? "Uploading..." : "Upload Question"}
-            </button>
-          </form>
+          </div>
         ) : (
-          <form className="upload-form" onSubmit={handleBulkUpload}>
-            <h2>Bulk Upload</h2>
-
-            <div className="form-group">
-              <label>File Type *</label>
-              <select
-                value={fileType}
-                onChange={(e) => setFileType(e.target.value)}
-                required
-              >
-                <option value="excel">Excel (.xlsx)</option>
-                <option value="csv">CSV (.csv)</option>
-                <option value="dat">Encrypted (.dat)</option>
-              </select>
-            </div>
-
-            {fileType === 'dat' && (
-              <div className="form-group">
-                <label>Password for .dat file *</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password for encrypted file"
-                  required
-                />
+          <div className="upload-form">
+            <div className="form-section">
+              <h3>Bulk Upload (Excel/CSV)</h3>
+              
+              <div className="form-row">
+                <div className="form-group full-width">
+                  <label>Select File *</label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv,.dat"
+                    onChange={handleFileChange}
+                    required
+                  />
+                </div>
               </div>
-            )}
 
-            <div className="bulk-info">
-              <h3>File Format</h3>
-              {fileType === 'excel' && (
-                <p>Excel file should have columns: Trade, PaperType, Question, OptionA, OptionB, OptionC, OptionD, CorrectAnswer, Marks</p>
+              {file && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Password (for .dat files)</label>
+                    <input
+                      type="password"
+                      placeholder="Enter password for encrypted .dat files"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
               )}
-              {fileType === 'csv' && (
-                <p>CSV file should have columns: Trade, PaperType, Question, OptionA, OptionB, OptionC, OptionD, CorrectAnswer, Marks</p>
-              )}
-              {fileType === 'dat' && (
-                <p>Encrypted .dat file containing JSON array of questions with the same structure as Excel/CSV</p>
-              )}
-              <p className="note">
-                <strong>Note:</strong> The system will automatically create papers for trades if they don't exist.
-                Questions will be added in the order they appear in the file.
-              </p>
+
+              <button type="submit" disabled={uploading}>
+                {uploading ? "Uploading..." : "Upload File"}
+              </button>
             </div>
-
-            <div className="form-group">
-              <label>
-                {fileType === 'excel' && 'Excel File (.xlsx) *'}
-                {fileType === 'csv' && 'CSV File (.csv) *'}
-                {fileType === 'dat' && 'Encrypted File (.dat) *'}
-              </label>
-              <input
-                type="file"
-                accept={fileType === 'excel' ? '.xlsx,.xls' : fileType === 'csv' ? '.csv' : '.dat'}
-                onChange={(e) => setFile(e.target.files[0])}
-                required
-              />
-            </div>
-
-            <button type="submit" className="submit-btn" disabled={uploading || !file}>
-              {uploading ? "Uploading..." : "Upload File"}
-            </button>
-          </form>
-        )}
-
-        {uploadResult && (
-          <div className={`upload-result ${uploadResult.success ? "success" : "error"}`}>
-            <h3>{uploadResult.success ? "✓ Success" : "✗ Error"}</h3>
-            <p>{uploadResult.message}</p>
-            {uploadResult.uploaded !== undefined && (
-              <p>Uploaded: {uploadResult.uploaded} questions</p>
-            )}
-            {uploadResult.totalErrors > 0 && (
-              <p className="error-count">Errors: {uploadResult.totalErrors} rows failed</p>
-            )}
           </div>
         )}
-      </div>
+      </form>
+
+      {uploadResult && (
+        <div className={`upload-result ${uploadResult.success ? "success" : "error"}`}>
+          {uploadResult.success ? (
+            <>
+              <h3>✅ Upload Successful!</h3>
+              <p>{uploadResult.message || "Questions uploaded successfully"}</p>
+              {uploadResult.uploaded && (
+                <p>Uploaded: {uploadResult.uploaded} questions</p>
+              )}
+            </>
+          ) : (
+            <>
+              <h3>❌ Upload Failed</h3>
+              <p>{uploadResult.error}</p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

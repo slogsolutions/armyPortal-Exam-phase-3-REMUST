@@ -26,13 +26,15 @@ export default function AdminLogin() {
 
     try {
       const res = await api.post("/auth/login", form);
+      console.log('🔐 Admin login response:', res.data);
 
       // ✅ Store token & admin info
-      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("adminToken", res.data.token);
       localStorage.setItem("admin", JSON.stringify(res.data.admin));
 
-      navigate("/admin/dashboard");
+      navigate("/admin", { replace: true });
     } catch (err) {
+      console.error('💥 Admin login error:', err);
       setError(
         err.response?.data?.msg ||
         "Invalid username or password"
@@ -82,6 +84,13 @@ export default function AdminLogin() {
           <button type="submit" disabled={loading}>
             {loading ? "Logging in..." : "Login"}
           </button>
+
+          <div className="login-links">
+            <p>
+              Register Candidate? 
+              <a href="/admin/register-candidate">Add Candidate</a>
+            </p>
+          </div>
         </form>
       </div>
     </div>

@@ -68,9 +68,12 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
+    console.log('🔐 Candidate login attempt:', req.body);
+    
     const { armyNo, dob } = req.body;
 
     if (!armyNo || !dob) {
+      console.log('❌ Missing credentials');
       return res.status(400).json({
         success: false,
         error: "Army number and date of birth are required"
@@ -87,6 +90,7 @@ exports.login = async (req, res) => {
     });
 
     if (!candidate) {
+      console.log('❌ Candidate not found:', armyNo);
       return res.status(401).json({
         success: false,
         error: "Invalid army number or date of birth"
@@ -98,6 +102,7 @@ exports.login = async (req, res) => {
     const providedDob = new Date(dob).toISOString().split('T')[0];
 
     if (candidateDob !== providedDob) {
+      console.log('❌ Date mismatch for:', armyNo);
       return res.status(401).json({
         success: false,
         error: "Invalid army number or date of birth"
@@ -116,6 +121,7 @@ exports.login = async (req, res) => {
       { expiresIn: "8h" }
     );
 
+    console.log('✅ Candidate login successful:', armyNo);
     res.json({
       success: true,
       token,
@@ -129,6 +135,7 @@ exports.login = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('💥 Candidate login error:', err);
     res.status(500).json({
       success: false,
       error: "Login failed"

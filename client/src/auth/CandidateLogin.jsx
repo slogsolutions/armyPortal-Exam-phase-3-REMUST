@@ -32,7 +32,7 @@ export default function CandidateLogin() {
       localStorage.setItem("candidate", JSON.stringify(res.data.candidate));
 
       // Redirect to candidate dashboard or instructions
-      navigate("/candidate/dashboard");
+      navigate("/candidate/exam");
     } catch (err) {
       setError(
         err.response?.data?.error ||
