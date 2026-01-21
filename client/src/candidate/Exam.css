@@ -288,6 +288,78 @@
   font-size: 11px;
 }
 
+.focus-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.focus-modal {
+  background: #0e1a14;
+  border: 2px solid #d4af37;
+  border-radius: 12px;
+  padding: 2rem;
+  width: min(500px, 90%);
+  text-align: center;
+  color: #f5f0d7;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+}
+
+.focus-modal h3 {
+  margin-top: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd700;
+}
+
+.focus-modal p {
+  font-size: 0.95rem;
+  margin: 1rem 0 1.5rem;
+  color: rgba(245, 240, 215, 0.85);
+}
+
+.focus-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.focus-actions button {
+  padding: 0.85rem 1.75rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  min-width: 180px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.resume-btn {
+  background: linear-gradient(135deg, #5ec576, #1a8a5a);
+  color: #041308;
+}
+
+.resume-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(94, 197, 118, 0.25);
+}
+
+.terminate-btn {
+  background: linear-gradient(135deg, #ff6b6b, #b91c1c);
+  color: #ffecec;
+}
+
+.terminate-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(185, 28, 28, 0.3);
+}
+
 .exam-loading {
   min-height: 100vh;
   display: flex;

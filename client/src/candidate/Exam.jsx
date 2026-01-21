@@ -14,7 +14,8 @@ export default function Exam() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [examStarted, setExamStarted] = useState(false);
   const [attemptId, setAttemptId] = useState(null);
-  const timerRef = useRef(null);
+  const [examFinished, setExamFinished] = useState(false);
+  const [showFocusModal, setShowFocusModal] = useState(false);
   const intervalRef = useRef(null);
   const startTimeRef = useRef(null);
 
@@ -91,6 +92,10 @@ export default function Exam() {
 
   // Security: Block keyboard shortcuts
   useEffect(() => {
+    if (!examStarted) {
+      return () => {};
+    }
+
     const handleKeyDown = (e) => {
       // Block F1-F12
       if (e.key.startsWith("F") && e.key.length <= 3) {
@@ -141,23 +146,30 @@ export default function Exam() {
       return e.returnValue;
     };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        alert("Warning: Tab switching detected! This will be reported.");
+    const handleFocusWarning = () => {
+      if (examFinished || showFocusModal) return;
+      if (document.hidden || document.hasFocus() === false) {
+        setShowFocusModal(true);
       }
     };
 
-    const handleBlur = () => {
-      if (document.hasFocus() === false) {
-        alert("Warning: Window focus lost! Please return to the exam window.");
-      }
+    const registerListeners = () => {
+      document.addEventListener("keydown", handleKeyDown);
+      document.addEventListener("contextmenu", handleContextMenu);
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      document.addEventListener("visibilitychange", handleFocusWarning);
+      window.addEventListener("blur", handleFocusWarning);
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("contextmenu", handleContextMenu);
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleBlur);
+    const unregisterListeners = () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleFocusWarning);
+      window.removeEventListener("blur", handleFocusWarning);
+    };
+
+    registerListeners();
 
     // Check fullscreen
     const checkFullscreen = () => {
@@ -178,14 +190,10 @@ export default function Exam() {
     const fullscreenInterval = setInterval(checkFullscreen, 1000);
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("contextmenu", handleContextMenu);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
+      unregisterListeners();
       clearInterval(fullscreenInterval);
     };
-  }, [examStarted]);
+  }, [examStarted, examFinished, showFocusModal]);
 
   // Format time
   const formatTime = (seconds) => {
@@ -203,38 +211,21 @@ export default function Exam() {
     }));
   };
 
-  // Handle auto-submit
-  const handleAutoSubmit = async () => {
-    if (!attemptId) return;
+  const submitExam = async ({ skipConfirm = false } = {}) => {
+    if (examFinished) return false;
 
-    const answerArray = Object.entries(answers).map(([questionId, selectedAnswer]) => ({
-      questionId: Number(questionId),
-      selectedAnswer
-    }));
-
-    try {
-      await api.post("/exam/submit", {
-        attemptId,
-        answers: answerArray
-      });
-
-      document.exitFullscreen();
-      navigate(`/result?candidateId=${candidateId}`);
-    } catch (error) {
-      console.error("Auto-submit error:", error);
-      alert("Error submitting exam");
-    }
-  };
-
-  // Handle manual submit
-  const handleSubmit = async () => {
-    if (!window.confirm("Are you sure you want to submit the exam? You cannot change your answers after submission.")) {
-      return;
+    if (!skipConfirm) {
+      const confirmed = window.confirm(
+        "Are you sure you want to submit the exam? You cannot change your answers after submission."
+      );
+      if (!confirmed) {
+        return false;
+      }
     }
 
     if (!attemptId) {
       alert("Exam not started");
-      return;
+      return false;
     }
 
     const answerArray = Object.entries(answers).map(([questionId, selectedAnswer]) => ({
@@ -248,12 +239,40 @@ export default function Exam() {
         answers: answerArray
       });
 
-      document.exitFullscreen();
-      navigate(`/result?candidateId=${candidateId}`);
+      setExamFinished(true);
+      setShowFocusModal(false);
+      document.exitFullscreen?.();
+      navigate(`/candidate/result?candidateId=${candidateId}`);
+      return true;
     } catch (error) {
       console.error("Submit error:", error);
       alert("Error submitting exam");
+      return false;
     }
+  };
+
+  // Handle auto-submit
+  const handleAutoSubmit = async () => {
+    if (!attemptId) return;
+    await submitExam({ skipConfirm: true });
+  };
+
+  // Handle manual submit
+  const handleSubmit = async () => {
+    await submitExam();
+  };
+
+  const handleResumeExam = async () => {
+    setShowFocusModal(false);
+    try {
+      await document.documentElement.requestFullscreen?.();
+    } catch (err) {
+      console.warn("Unable to re-enter fullscreen", err);
+    }
+  };
+
+  const handleTerminateExam = async () => {
+    await submitExam({ skipConfirm: true });
   };
 
   if (!paper || !examStarted) {
@@ -270,7 +289,25 @@ export default function Exam() {
   const totalQuestions = paper.questions.length;
 
   return (
-    <div className="exam-container">
+    <>
+      {showFocusModal && !examFinished && (
+        <div className="focus-overlay">
+          <div className="focus-modal">
+            <h3>Warning: Window focus lost!</h3>
+            <p>Please return to the exam window. Leaving the exam may lead to termination.</p>
+            <div className="focus-actions">
+              <button className="resume-btn" onClick={handleResumeExam}>
+                Return to Exam
+              </button>
+              <button className="terminate-btn" onClick={handleTerminateExam}>
+                Terminate &amp; Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="exam-container">
       {/* Header with timer */}
       <div className="exam-header">
         <div className="exam-info">
@@ -371,6 +408,7 @@ export default function Exam() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
