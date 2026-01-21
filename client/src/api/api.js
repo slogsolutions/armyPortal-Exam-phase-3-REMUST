@@ -7,7 +7,22 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const adminToken = localStorage.getItem("adminToken");
   const candidateToken = localStorage.getItem("candidateToken");
-  const token = adminToken || candidateToken;
+
+  const urlPath = config.url || "";
+  let token = null;
+
+  if (urlPath.startsWith("/admin")) {
+    token = adminToken || candidateToken;
+  } else if (
+    urlPath.startsWith("/candidate") ||
+    urlPath.startsWith("/briefing") ||
+    urlPath.startsWith("/exam") ||
+    urlPath.startsWith("/result")
+  ) {
+    token = candidateToken || adminToken;
+  } else {
+    token = adminToken || candidateToken;
+  }
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

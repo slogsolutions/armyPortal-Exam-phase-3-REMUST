@@ -67,7 +67,31 @@ exports.getCandidateBriefing = async (req, res) => {
       }
     });
 
-    const enrichedSlots = await attachQuestionCounts(candidate.examSlots, prisma);
+    const now = new Date();
+
+    let candidateSlotsRaw = [];
+    if (selectedTypes.length > 0) {
+      candidateSlotsRaw = await prisma.examSlot.findMany({
+        where: {
+          tradeId: candidate.tradeId,
+          paperType: { in: selectedTypes },
+          endTime: { gte: now },
+          isActive: true,
+          ...(candidate.commandId ? { commandId: candidate.commandId } : {}),
+          ...(candidate.centerId ? { centerId: candidate.centerId } : {})
+        },
+        include: {
+          command: true,
+          center: true,
+          trade: true
+        },
+        orderBy: {
+          startTime: 'asc'
+        }
+      });
+    }
+
+    const enrichedSlots = await attachQuestionCounts(candidateSlotsRaw, prisma);
 
     // Build briefing data
     const briefing = {
@@ -80,7 +104,7 @@ exports.getCandidateBriefing = async (req, res) => {
         command: candidate.command?.name || null,
         center: candidate.center?.name || null
       },
-      selectedExamTypes,
+      selectedExamTypes: selectedTypes,
       tradeConfig: {
         negativeMarking: candidate.trade.negativeMarking,
         minPercent: candidate.trade.minPercent,
@@ -106,7 +130,7 @@ exports.getCandidateBriefing = async (req, res) => {
         startTime: slot.startTime,
         endTime: slot.endTime,
         currentCount: slot.currentCount,
-        canStart: new Date() >= new Date(slot.startTime) && new Date() <= new Date(slot.endTime),
+        canStart: now >= new Date(slot.startTime) && now <= new Date(slot.endTime),
         questionCount: slot.questionCount || 0,
         command: slot.command?.name || candidate.command?.name || null,
         center: slot.center?.name || candidate.center?.name || null

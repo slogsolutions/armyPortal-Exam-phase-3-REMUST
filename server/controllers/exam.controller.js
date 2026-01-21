@@ -83,31 +83,77 @@ exports.getAvailablePapers = async (req, res) => {
  */
 exports.startExam = async (req, res) => {
   try {
-    const { candidateId, examPaperId, examSlotId } = req.body;
+    const { candidateId, paperType, examSlotId, examPaperId } = req.body;
 
-    // Validate candidate
+    if (!candidateId) {
+      return res.status(400).json({ error: "candidateId is required" });
+    }
+
+    // Validate candidate and load trade/command/center
     const candidate = await prisma.candidate.findUnique({
       where: { id: Number(candidateId) },
-      include: { trade: true }
+      include: { trade: true, command: true, center: true }
     });
 
     if (!candidate) {
       return res.status(404).json({ error: "Candidate not found" });
     }
 
-    // Validate exam paper
-    const paper = await prisma.examPaper.findUnique({
-      where: { id: Number(examPaperId) },
-      include: { questions: true }
-    });
+    // Determine paper type
+    let resolvedPaperType = paperType || null;
 
-    if (!paper) {
-      return res.status(404).json({ error: "Paper not found" });
+    let paper = null;
+    if (examPaperId) {
+      paper = await prisma.examPaper.findUnique({
+        where: { id: Number(examPaperId) },
+        include: { questions: true }
+      });
+
+      if (!paper) {
+        return res.status(404).json({ error: "Paper not found" });
+      }
+
+      resolvedPaperType = resolvedPaperType || paper.paperType;
+
+      if (paper.tradeId !== candidate.tradeId) {
+        return res.status(403).json({ error: "Paper does not belong to candidate trade" });
+      }
     }
 
-    // Validate slot if provided
+    if (!resolvedPaperType) {
+      return res.status(400).json({ error: "paperType is required" });
+    }
+
+    // Ensure candidate registered for this paper type (if registration exists)
+    const selectedTypes = candidate.selectedExamTypes
+      ? JSON.parse(candidate.selectedExamTypes)
+      : [];
+
+    if (selectedTypes.length && !selectedTypes.includes(resolvedPaperType)) {
+      return res.status(403).json({ error: "Candidate is not registered for this paper type" });
+    }
+
+    // Resolve paper if not provided via ID
+    if (!paper) {
+      paper = await prisma.examPaper.findFirst({
+        where: {
+          tradeId: candidate.tradeId,
+          paperType: resolvedPaperType,
+          isActive: true
+        },
+        include: { questions: true }
+      });
+
+      if (!paper) {
+        return res.status(404).json({ error: "No question bank uploaded for this trade and paper type" });
+      }
+    }
+
+    let slot = null;
+    const now = new Date();
+
     if (examSlotId) {
-      const slot = await prisma.examSlot.findUnique({
+      slot = await prisma.examSlot.findUnique({
         where: { id: Number(examSlotId) }
       });
 
@@ -115,8 +161,14 @@ exports.startExam = async (req, res) => {
         return res.status(404).json({ error: "Exam slot not found" });
       }
 
-      // Check if current time is within slot time
-      const now = new Date();
+      if (!slot.isActive) {
+        return res.status(400).json({ error: "Exam slot is inactive" });
+      }
+
+      if (slot.tradeId !== candidate.tradeId || slot.paperType !== resolvedPaperType) {
+        return res.status(403).json({ error: "Exam slot does not match candidate trade or paper" });
+      }
+
       if (now < new Date(slot.startTime)) {
         return res.status(400).json({ error: "Exam slot has not started yet" });
       }
@@ -124,26 +176,42 @@ exports.startExam = async (req, res) => {
         return res.status(400).json({ error: "Exam slot has ended" });
       }
 
-      // Check if candidate is assigned to this slot
-      const isAssigned = await prisma.examSlot.findFirst({
+      if (candidate.commandId && slot.commandId !== candidate.commandId) {
+        return res.status(403).json({ error: "Exam slot command does not match candidate command" });
+      }
+
+      if (candidate.centerId && slot.centerId !== candidate.centerId) {
+        return res.status(403).json({ error: "Exam slot center does not match candidate center" });
+      }
+
+      // Auto-attach candidate to slot if not already assigned
+      const alreadyAssigned = await prisma.examSlot.findFirst({
         where: {
-          id: Number(examSlotId),
+          id: slot.id,
           candidates: {
-            some: { id: Number(candidateId) }
+            some: { id: candidate.id }
           }
         }
       });
 
-      if (!isAssigned) {
-        return res.status(403).json({ error: "Candidate not assigned to this exam slot" });
+      if (!alreadyAssigned) {
+        await prisma.examSlot.update({
+          where: { id: slot.id },
+          data: {
+            candidates: {
+              connect: { id: candidate.id }
+            }
+          }
+        });
       }
     }
 
-    // Check if attempt already exists
+    // Check if attempt already exists for this paper (and slot, if provided)
     let attempt = await prisma.examAttempt.findFirst({
       where: {
         candidateId: Number(candidateId),
-        examPaperId: Number(examPaperId),
+        examPaperId: paper.id,
+        ...(slot ? { examSlotId: slot.id } : {}),
         status: { in: ["PENDING", "IN_PROGRESS"] }
       }
     });
@@ -156,13 +224,13 @@ exports.startExam = async (req, res) => {
     attempt = await prisma.examAttempt.create({
       data: {
         candidateId: Number(candidateId),
-        examPaperId: Number(examPaperId),
-        examSlotId: examSlotId ? Number(examSlotId) : null,
+        examPaperId: paper.id,
+        examSlotId: slot ? slot.id : null,
         score: 0,
         totalMarks: paper.questions.reduce((sum, q) => sum + q.marks, 0),
         percentage: 0,
         status: "IN_PROGRESS",
-        startedAt: new Date()
+        startedAt: now
       }
     });
 

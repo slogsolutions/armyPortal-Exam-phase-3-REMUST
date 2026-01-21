@@ -8,6 +8,7 @@ export default function Instructions() {
   const [agreed, setAgreed] = useState(false);
   const candidateId = searchParams.get("candidateId");
   const paperType = searchParams.get("paperType");
+  const slotId = searchParams.get("slotId");
 
   const start = async () => {
     if (!agreed) {
@@ -26,7 +27,15 @@ export default function Instructions() {
       }
 
       // Navigate to exam with parameters
-      navigate(`/exam?candidateId=${candidateId}&paperType=${paperType}`);
+      const params = new URLSearchParams({
+        candidateId: String(candidateId),
+        paperType: String(paperType)
+      });
+      if (slotId) {
+        params.set("slotId", String(slotId));
+      }
+
+      navigate(`/candidate/exam?${params.toString()}`);
     } catch (error) {
       console.error("Fullscreen error:", error);
       alert("Please allow fullscreen to continue with the exam");

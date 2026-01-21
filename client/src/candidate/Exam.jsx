@@ -39,18 +39,27 @@ export default function Exam() {
         setTimeRemaining(3 * 60 * 60); // 3 hours default
 
         // Start exam attempt
-        const attemptRes = await api.post("/exam/start", {
+        const startPayload = {
           candidateId: Number(candidateId),
+          paperType,
           examPaperId: paperRes.data.id
-        });
+        };
+
+        const slotId = searchParams.get("slotId");
+        if (slotId) {
+          startPayload.examSlotId = Number(slotId);
+        }
+
+        const attemptRes = await api.post("/exam/start", startPayload);
         
         setAttemptId(attemptRes.data.id);
         startTimeRef.current = new Date();
         setExamStarted(true);
       } catch (error) {
         console.error("Error loading paper:", error);
-        alert("Failed to load exam paper");
-        navigate("/");
+        const message = error.response?.data?.error || "Failed to load exam paper";
+        alert(message);
+        navigate("/candidate/dashboard", { replace: true });
       }
     };
 
