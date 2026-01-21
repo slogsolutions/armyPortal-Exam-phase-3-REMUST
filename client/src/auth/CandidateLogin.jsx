@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import "./CandidateLogin.css";
@@ -13,11 +13,58 @@ export default function CandidateLogin() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [candidateMeta, setCandidateMeta] = useState(null);
+  const [selectedPaper, setSelectedPaper] = useState("");
+  const [paperOptions, setPaperOptions] = useState([]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
     setError("");
   };
+
+  useEffect(() => {
+    if (form.armyNo.length >= 4) {
+      const controller = new AbortController();
+      const fetchMeta = async () => {
+        try {
+          const res = await api.post("/candidate/peek", { armyNo: form.armyNo }, { signal: controller.signal });
+          if (res.data?.candidate) {
+            setCandidateMeta(res.data.candidate);
+            const exams = Array.isArray(res.data.candidate.selectedExamTypes)
+              ? res.data.candidate.selectedExamTypes
+              : [];
+            setPaperOptions(exams);
+            if (exams.length === 1) {
+              setSelectedPaper(exams[0]);
+            }
+          } else {
+            setCandidateMeta(null);
+            setPaperOptions([]);
+            setSelectedPaper("");
+          }
+        } catch (err) {
+          if (err.name !== "CanceledError") {
+            setCandidateMeta(null);
+            setPaperOptions([]);
+            setSelectedPaper("");
+          }
+        }
+      };
+      fetchMeta();
+      return () => controller.abort();
+    } else {
+      setCandidateMeta(null);
+      setPaperOptions([]);
+      setSelectedPaper("");
+    }
+  }, [form.armyNo]);
+
+  const disableLogin = useMemo(() => {
+    if (loading) return true;
+    if (!form.armyNo || !form.dob) return true;
+    if (paperOptions.length > 0 && !selectedPaper) return true;
+    return false;
+  }, [form.armyNo, form.dob, loading, paperOptions.length, selectedPaper]);
 
   const login = async (e) => {
     e.preventDefault();
@@ -25,14 +72,17 @@ export default function CandidateLogin() {
     setLoading(true);
 
     try {
-      const res = await api.post("/candidate/login", form);
+      const res = await api.post("/candidate/login", {
+        ...form,
+        paperType: selectedPaper || null
+      });
 
       // ✅ Store token & candidate info
       localStorage.setItem("candidateToken", res.data.token);
       localStorage.setItem("candidate", JSON.stringify(res.data.candidate));
 
-      // Redirect to candidate dashboard or instructions
-      navigate("/candidate/exam");
+      // Redirect to candidate dashboard
+      navigate("/candidate/dashboard");
     } catch (err) {
       setError(
         err.response?.data?.error ||
@@ -78,9 +128,37 @@ export default function CandidateLogin() {
             />
           </div>
 
+          {paperOptions.length > 0 && (
+            <div className="form-group">
+              <label>Paper Type</label>
+              <select
+                name="paperType"
+                value={selectedPaper}
+                onChange={(e) => setSelectedPaper(e.target.value)}
+                disabled={loading}
+              >
+                <option value="">Select paper</option>
+                {paperOptions.map((paper) => (
+                  <option key={paper} value={paper}>
+                    {paper}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {candidateMeta && (
+            <div className="candidate-peek">
+              <p><strong>Name:</strong> {candidateMeta.name}</p>
+              <p><strong>Trade:</strong> {candidateMeta.trade?.name || candidateMeta.trade?.name}</p>
+              <p><strong>Command:</strong> {candidateMeta.command?.name}</p>
+              {candidateMeta.center?.name && <p><strong>Centre:</strong> {candidateMeta.center.name}</p>}
+            </div>
+          )}
+
           {error && <div className="error-message">{error}</div>}
 
-          <button type="submit" disabled={loading}>
+          <button type="submit" disabled={disableLogin}>
             {loading ? "Logging in..." : "Login"}
           </button>
 

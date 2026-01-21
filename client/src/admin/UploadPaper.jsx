@@ -69,7 +69,7 @@ export default function UploadPaper() {
         res = await api.post(endpoint, formData);
       }
       setUploadResult(res.data);
-      
+
       if (res.data.success) {
         setForm({
           tradeId: "",
@@ -87,7 +87,16 @@ export default function UploadPaper() {
       }
     } catch (err) {
       console.error("Upload failed:", err);
-      setUploadResult({ success: false, error: err.response?.data?.error || err.message || "Upload failed" });
+      const errorData = err.response?.data;
+      if (errorData) {
+        setUploadResult({
+          ...errorData,
+          success: errorData.success ?? false,
+          error: errorData.error || errorData.message || err.message || "Upload failed"
+        });
+      } else {
+        setUploadResult({ success: false, status: "failed", error: err.message || "Upload failed" });
+      }
     } finally {
       setUploading(false);
     }
@@ -296,22 +305,101 @@ export default function UploadPaper() {
       </form>
 
       {uploadResult && (
-        <div className={`upload-result ${uploadResult.success ? "success" : "error"}`}>
-          {uploadResult.success ? (
-            <>
-              <h3>✅ Upload Successful!</h3>
-              <p>{uploadResult.message || "Questions uploaded successfully"}</p>
-              {uploadResult.uploaded && (
-                <p>Uploaded: {uploadResult.uploaded} questions</p>
+        (() => {
+          const status = uploadResult.status || (uploadResult.success ? "success" : "failed");
+          const headings = {
+            success: "✅ Upload Successful",
+            partial: "⚠️ Upload Partially Successful",
+            failed: "❌ Upload Failed"
+          };
+          const headline = headings[status] || "Upload Result";
+          const totalRows = uploadResult.totalRows ?? (uploadResult.uploaded ?? 0) + (uploadResult.errorCount ?? 0);
+
+          return (
+            <div className={`upload-result status-${status}`}>
+              <h3>{headline}</h3>
+              <p>
+                {uploadResult.message || uploadResult.error ||
+                  (status === "success"
+                    ? "Questions uploaded successfully."
+                    : "Upload completed with issues. Review the details below.")}
+              </p>
+
+              <div className="upload-stat-grid">
+                <div className="stat-pill">
+                  <span className="label">Total Rows</span>
+                  <span className="value">{totalRows}</span>
+                </div>
+                <div className="stat-pill">
+                  <span className="label">Created</span>
+                  <span className="value">{uploadResult.uploaded ?? 0}</span>
+                </div>
+                <div className="stat-pill">
+                  <span className="label">Errors</span>
+                  <span className="value">{uploadResult.errorCount ?? (uploadResult.errors?.length ?? 0)}</span>
+                </div>
+              </div>
+
+              {uploadResult.summary?.length > 0 && (
+                <div className="upload-summary">
+                  <h4>Summary by Trade &amp; Paper</h4>
+                  <table className="upload-summary-table">
+                    <thead>
+                      <tr>
+                        <th>Trade</th>
+                        <th>Paper Type</th>
+                        <th>Attempted</th>
+                        <th>Created</th>
+                        <th>Errors</th>
+                        <th>Pending</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {uploadResult.summary.map((entry, index) => (
+                        <tr key={`${entry.tradeName}-${entry.paperType}-${index}`}>
+                          <td>{entry.tradeName}</td>
+                          <td>{entry.paperType}</td>
+                          <td>{entry.attempted}</td>
+                          <td>{entry.created}</td>
+                          <td>{entry.errors}</td>
+                          <td>{entry.pending}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </>
-          ) : (
-            <>
-              <h3>❌ Upload Failed</h3>
-              <p>{uploadResult.error}</p>
-            </>
-          )}
-        </div>
+
+              {uploadResult.errorBreakdown?.length > 0 && (
+                <div className="upload-errors">
+                  <h4>Error Breakdown</h4>
+                  <ul>
+                    {uploadResult.errorBreakdown.map(({ reason, count }, index) => (
+                      <li key={`${reason}-${index}`}>
+                        <span className="reason">{reason}</span>
+                        <span className="count">{count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {uploadResult.errorSamples?.length > 0 && (
+                <details className="error-samples" open={status !== "success"}>
+                  <summary>View sample problematic rows ({uploadResult.errorSamples.length})</summary>
+                  <div className="samples">
+                    {uploadResult.errorSamples.map((sample, index) => (
+                      <div key={index} className="sample-row">
+                        <pre>{JSON.stringify(sample.row, null, 2)}</pre>
+                        <p className="sample-error">{sample.error}</p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          );
+        })()
       )}
     </div>
   );

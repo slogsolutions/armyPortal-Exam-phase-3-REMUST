@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { attachQuestionCounts } = require("../utils/questionCounts");
 
 /**
  * Get candidate briefing information
@@ -21,7 +22,8 @@ exports.getCandidateBriefing = async (req, res) => {
           },
           include: {
             trade: true,
-            examPaper: true
+            command: true,
+            center: true
           },
           orderBy: {
             startTime: 'asc'
@@ -65,16 +67,18 @@ exports.getCandidateBriefing = async (req, res) => {
       }
     });
 
+    const enrichedSlots = await attachQuestionCounts(candidate.examSlots, prisma);
+
     // Build briefing data
     const briefing = {
       candidate: {
         id: candidate.id,
         armyNo: candidate.armyNo,
         name: candidate.name,
-        rank: candidate.rank.name,
-        trade: candidate.trade.name,
-        command: candidate.command.name,
-        center: candidate.center.name
+        rank: candidate.rank?.name || null,
+        trade: candidate.trade?.name || null,
+        command: candidate.command?.name || null,
+        center: candidate.center?.name || null
       },
       selectedExamTypes,
       tradeConfig: {
@@ -96,16 +100,16 @@ exports.getCandidateBriefing = async (req, res) => {
         questionCount: paper._count.questions,
         isActive: paper.isActive
       })),
-      examSlots: candidate.examSlots.map(slot => ({
+      examSlots: enrichedSlots.map(slot => ({
         id: slot.id,
         paperType: slot.paperType,
         startTime: slot.startTime,
         endTime: slot.endTime,
-        maxCandidates: slot.maxCandidates,
         currentCount: slot.currentCount,
-        location: slot.location,
-        instructions: slot.instructions,
-        canStart: new Date() >= new Date(slot.startTime) && new Date() <= new Date(slot.endTime)
+        canStart: new Date() >= new Date(slot.startTime) && new Date() <= new Date(slot.endTime),
+        questionCount: slot.questionCount || 0,
+        command: slot.command?.name || candidate.command?.name || null,
+        center: slot.center?.name || candidate.center?.name || null
       })),
       examStatus: examAttempts.map(attempt => ({
         paperType: attempt.examPaper.paperType,
@@ -198,6 +202,7 @@ exports.getExamInstructions = async (req, res) => {
       negativeMarking: candidate.trade.negativeMarking || 0,
       passingMarks: candidate.trade.minPercent || 40,
       slotInfo: {
+        id: examSlot.id,
         startTime: examSlot.startTime,
         endTime: examSlot.endTime,
         location: examSlot.location,

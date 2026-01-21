@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import "./Register.css";
 
 export default function Register() {
+  const navigate = useNavigate();
 
   const [masters, setMasters] = useState({
     ranks: [],
     trades: [],
-    commands: []
+    commands: [],
+    centers: []
   });
 
   const [form, setForm] = useState({
@@ -21,14 +24,16 @@ export default function Register() {
     medCat: "",
     corps: "",
     commandId: "",
+    centerId: "",
     selectedExamTypes: []
   });
 
   const [errors, setErrors] = useState({});
   const [selectedTrade, setSelectedTrade] = useState(null);
-
+  
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   /* ===== LOAD DROPDOWNS ===== */
   useEffect(() => {
@@ -37,7 +42,8 @@ export default function Register() {
         setMasters({
           ranks: Array.isArray(res.data?.ranks) ? res.data.ranks : [],
           trades: Array.isArray(res.data?.trades) ? res.data.trades : [],
-          commands: Array.isArray(res.data?.commands) ? res.data.commands : []
+          commands: Array.isArray(res.data?.commands) ? res.data.commands : [],
+          centers: Array.isArray(res.data?.centers) ? res.data.centers : []
         });
         setLoading(false);
       })
@@ -47,6 +53,13 @@ export default function Register() {
       });
   }, []);
 
+  const filteredCenters = useMemo(() => {
+    if (!form.commandId) return [];
+    return masters.centers.filter(center => center.commandId === Number(form.commandId));
+  }, [masters.centers, form.commandId]);
+
+  const transformedTrades = useMemo(() => masters.trades, [masters.trades]);
+
   /* ===== HANDLE CHANGE ===== */
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -54,13 +67,17 @@ export default function Register() {
     setForm(prev => ({ ...prev, [name]: value }));
     setErrors(prev => ({ ...prev, [name]: "" }));
 
-    if (name === "tradeId" && value) {
-      const trade = Array.isArray(masters.trades)
-        ? masters.trades.find(t => t.id === Number(value))
+    if (name === "tradeId") {
+      const trade = Array.isArray(transformedTrades)
+        ? transformedTrades.find(t => t.id === Number(value))
         : null;
 
       setSelectedTrade(trade || null);
-      setForm(prev => ({ ...prev, selectedExamTypes: [] }));
+      setForm(prev => ({ ...prev, selectedExamTypes: trade ? prev.selectedExamTypes : [] }));
+    }
+
+    if (name === "commandId") {
+      setForm(prev => ({ ...prev, centerId: "" }));
     }
   };
 
@@ -99,13 +116,17 @@ export default function Register() {
     if (!validate()) return;
 
     try {
-      const res = await api.post("/candidate/register", form);
-      const candidateId = res.data.candidate.id;
-      alert("Candidate Registered Successfully!");
-      localStorage.setItem("candidateId", candidateId);
-      window.location.href = "/instructions";
+      setSubmitting(true);
+      await api.post("/candidate/register", form);
+      alert("Candidate registered successfully. Please login to continue.");
+      navigate("/candidate/login", {
+        replace: true,
+        state: { armyNo: form.armyNo }
+      });
     } catch (err) {
       alert(err.response?.data?.error || "Registration failed");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -113,8 +134,13 @@ export default function Register() {
   if (loading) {
     return (
       <div className="register-page">
-        <div className="form-card">
-          <h3>Loading registration form...</h3>
+        <div className="overlay" />
+        <div className="register-card">
+          <header className="register-header">
+            <h1>Army Candidate Registration</h1>
+            <p>Preparing registration form…</p>
+          </header>
+          <p className="loading-copy">Loading registration form...</p>
         </div>
       </div>
     );
@@ -124,9 +150,15 @@ export default function Register() {
   if (loadError) {
     return (
       <div className="register-page">
-        <div className="form-card">
-          <h2>Error</h2>
-          <p>{loadError}</p>
+        <div className="overlay" />
+        <div className="register-card error-state">
+          <header className="register-header">
+            <h1>Army Candidate Registration</h1>
+          </header>
+          <div className="error-pane">
+            <h2>Unable to load form</h2>
+            <p>{loadError}</p>
+          </div>
         </div>
       </div>
     );
@@ -134,151 +166,175 @@ export default function Register() {
 
   return (
     <div className="register-page">
-      <div className="overlay"></div>
+      <div className="overlay" />
 
-      <div className="form-card">
-        <h1>ARMY CANDIDATE REGISTRATION</h1>
-        <h3>2 Signal Training Centre Online Exam Portal</h3>
+      <div className="register-card">
+        <header className="register-header">
+          <h1>Army Candidate Registration</h1>
+          <p>2 Signal Training Centre · Online Examination Portal</p>
+        </header>
 
-        <form onSubmit={handleSubmit}>
-          <h4>Personal Details</h4>
+        <form className="register-form" onSubmit={handleSubmit}>
+          <section>
+            <h2 className="section-title">Personal Details</h2>
+            <div className="grid two">
+              <div className="form-group">
+                <label htmlFor="armyNo">Army No (Username) *</label>
+                <input id="armyNo" name="armyNo" value={form.armyNo} onChange={handleChange} />
+                {errors.armyNo && <span className="error">{errors.armyNo}</span>}
+              </div>
 
-          {/* Army No + Rank */}
-          <div className="row">
-            <div>
-              <label>Army No (USERNAME) *</label>
-              <input name="armyNo" onChange={handleChange} />
-              {errors.armyNo && <span>{errors.armyNo}</span>}
+              <div className="form-group">
+                <label htmlFor="rankId">Rank *</label>
+                <select id="rankId" name="rankId" value={form.rankId} onChange={handleChange}>
+                  <option value="">Select Rank</option>
+                  {masters.ranks.map((rank) => (
+                    <option key={rank.id} value={rank.id}>{rank.name}</option>
+                  ))}
+                </select>
+                {errors.rankId && <span className="error">{errors.rankId}</span>}
+              </div>
             </div>
 
-            <div>
-              <label>Rank *</label>
-              <select name="rankId" onChange={handleChange}>
-                <option value="">– Select Rank –</option>
-                {masters.ranks.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
-              {errors.rankId && <span>{errors.rankId}</span>}
-            </div>
-          </div>
+            <div className="grid two">
+              <div className="form-group">
+                <label htmlFor="name">Name *</label>
+                <input id="name" name="name" value={form.name} onChange={handleChange} />
+                {errors.name && <span className="error">{errors.name}</span>}
+              </div>
 
-          {/* Name + Trade */}
-          <div className="row">
-            <div>
-              <label>Name *</label>
-              <input name="name" onChange={handleChange} />
-              {errors.name && <span>{errors.name}</span>}
-            </div>
-
-            <div>
-              <label>Trade *</label>
-              <select name="tradeId" onChange={handleChange}>
-                <option value="">– Select Trade –</option>
-                {masters.trades.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              {errors.tradeId && <span>{errors.tradeId}</span>}
-            </div>
-          </div>
-
-          {/* DOB + DOE */}
-          <div className="row">
-            <div>
-              <label>Date of Birth *</label>
-              <input type="date" name="dob" onChange={handleChange} />
-              {errors.dob && <span>{errors.dob}</span>}
+              <div className="form-group">
+                <label htmlFor="tradeId">Trade *</label>
+                <select id="tradeId" name="tradeId" value={form.tradeId} onChange={handleChange}>
+                  <option value="">Select Trade</option>
+                  {transformedTrades.map((trade) => (
+                    <option key={trade.id} value={trade.id}>{trade.name}</option>
+                  ))}
+                </select>
+                {errors.tradeId && <span className="error">{errors.tradeId}</span>}
+              </div>
             </div>
 
-            <div>
-              <label>Date of Enrollment *</label>
-              <input type="date" name="doe" onChange={handleChange} />
-              {errors.doe && <span>{errors.doe}</span>}
+            <div className="grid two">
+              <div className="form-group">
+                <label htmlFor="dob">Date of Birth *</label>
+                <input type="date" id="dob" name="dob" value={form.dob} onChange={handleChange} />
+                {errors.dob && <span className="error">{errors.dob}</span>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="doe">Date of Enrolment *</label>
+                <input type="date" id="doe" name="doe" value={form.doe} onChange={handleChange} />
+                {errors.doe && <span className="error">{errors.doe}</span>}
+              </div>
             </div>
-          </div>
 
-          {/* Unit + Medical */}
-          <div className="row">
-            <div>
-              <label>Unit *</label>
-              <input name="unit" onChange={handleChange} />
-              {errors.unit && <span>{errors.unit}</span>}
+            <div className="grid two">
+              <div className="form-group">
+                <label htmlFor="unit">Unit *</label>
+                <input id="unit" name="unit" value={form.unit} onChange={handleChange} />
+                {errors.unit && <span className="error">{errors.unit}</span>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="medCat">Medical Category *</label>
+                <input id="medCat" name="medCat" value={form.medCat} onChange={handleChange} />
+                {errors.medCat && <span className="error">{errors.medCat}</span>}
+              </div>
             </div>
 
-            <div>
-              <label>Medical Category *</label>
-              <input name="medCat" onChange={handleChange} />
-              {errors.medCat && <span>{errors.medCat}</span>}
+            <div className="grid two">
+              <div className="form-group">
+                <label htmlFor="commandId">Command *</label>
+                <select id="commandId" name="commandId" value={form.commandId} onChange={handleChange}>
+                  <option value="">Select Command</option>
+                  {masters.commands.map((command) => (
+                    <option key={command.id} value={command.id}>{command.name}</option>
+                  ))}
+                </select>
+                {errors.commandId && <span className="error">{errors.commandId}</span>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="centerId">Conducting Centre *</label>
+                <select
+                  id="centerId"
+                  name="centerId"
+                  value={form.centerId}
+                  onChange={handleChange}
+                  disabled={!form.commandId || filteredCenters.length === 0}
+                >
+                  <option value="">{form.commandId ? "Select Centre" : "Select command first"}</option>
+                  {filteredCenters.map((center) => (
+                    <option key={center.id} value={center.id}>{center.name}</option>
+                  ))}
+                </select>
+                {errors.centerId && <span className="error">{errors.centerId}</span>}
+              </div>
             </div>
-          </div>
 
-          {/* Command */}
-          <div>
-            <label>Command *</label>
-            <select name="commandId" onChange={handleChange}>
-              <option value="">– Select Command –</option>
-              {masters.commands.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            {errors.commandId && <span>{errors.commandId}</span>}
-          </div>
-
-          {/* Corps */}
-          <div className="row">
-            <div>
-              <label>Corps *</label>
-              <input name="corps" onChange={handleChange} />
-              {errors.corps && <span>{errors.corps}</span>}
+            <div className="form-group">
+              <label htmlFor="corps">Corps *</label>
+              <input id="corps" name="corps" value={form.corps} onChange={handleChange} />
+              {errors.corps && <span className="error">{errors.corps}</span>}
             </div>
-          </div>
+          </section>
 
-          <h4>Exam Details</h4>
+          <section>
+            <h2 className="section-title">Written Paper Selection</h2>
+            {selectedTrade ? (
+              <div className="exam-types">
+                <p className="exam-helper">Select the written papers you are appearing for. Only enabled papers for the chosen trade are shown.</p>
+                <div className="exam-list">
+                  {selectedTrade.wp1 && (
+                    <label className="exam-option">
+                      <input
+                        type="checkbox"
+                        checked={form.selectedExamTypes.includes("WP-I")}
+                        onChange={() => handleExamTypeChange("WP-I")}
+                      />
+                      <span>WP-I · Written Paper I</span>
+                    </label>
+                  )}
+                  {selectedTrade.wp2 && (
+                    <label className="exam-option">
+                      <input
+                        type="checkbox"
+                        checked={form.selectedExamTypes.includes("WP-II")}
+                        onChange={() => handleExamTypeChange("WP-II")}
+                      />
+                      <span>WP-II · Written Paper II</span>
+                    </label>
+                  )}
+                  {selectedTrade.wp3 && (
+                    <label className="exam-option">
+                      <input
+                        type="checkbox"
+                        checked={form.selectedExamTypes.includes("WP-III")}
+                        onChange={() => handleExamTypeChange("WP-III")}
+                      />
+                      <span>WP-III · Written Paper III</span>
+                    </label>
+                  )}
+                  {!selectedTrade.wp1 && !selectedTrade.wp2 && !selectedTrade.wp3 && (
+                    <p className="exam-warning">No written papers are enabled for the selected trade. Contact the admin.</p>
+                  )}
+                </div>
+                {errors.selectedExamTypes && <span className="error">{errors.selectedExamTypes}</span>}
+              </div>
+            ) : (
+              <p className="exam-placeholder">Select a trade to view available written papers.</p>
+            )}
+          </section>
 
-          {/* Exam Types */}
-          {selectedTrade && (
-            <div className="exam-types-section">
-              <label>Select Written Exam Types *</label>
-
-              {selectedTrade.wp1 && (
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.selectedExamTypes.includes("WP-I")}
-                    onChange={() => handleExamTypeChange("WP-I")}
-                  />
-                  WP-I
-                </label>
-              )}
-
-              {selectedTrade.wp2 && (
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.selectedExamTypes.includes("WP-II")}
-                    onChange={() => handleExamTypeChange("WP-II")}
-                  />
-                  WP-II
-                </label>
-              )}
-
-              {selectedTrade.wp3 && (
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.selectedExamTypes.includes("WP-III")}
-                    onChange={() => handleExamTypeChange("WP-III")}
-                  />
-                  WP-III
-                </label>
-              )}
-
-              {errors.selectedExamTypes && <span>{errors.selectedExamTypes}</span>}
-            </div>
-          )}
-
-          <button type="submit">Register Candidate</button>
+          <footer className="register-footer">
+            <button type="submit" disabled={submitting}>
+              {submitting ? "Registering…" : "Register Candidate"}
+            </button>
+            <p className="login-redirect">
+              Already registered? <button type="button" className="link" onClick={() => navigate("/candidate/login")}>Go to Candidate Login</button>
+            </p>
+          </footer>
         </form>
       </div>
     </div>

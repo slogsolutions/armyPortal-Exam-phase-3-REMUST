@@ -3,6 +3,7 @@ const ctrl = require("../controllers/candidate.controller");
 const isAuth = require("../middlewares/isAuth");
 
 /* ===== CANDIDATE LOGIN (PUBLIC) ===== */
+router.post("/peek", ctrl.peek);
 router.post("/login", ctrl.login);
 
 /* ===== CANDIDATE REGISTRATION (PUBLIC) ===== */

@@ -6,7 +6,7 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const adminToken = localStorage.getItem("adminToken");
-  const candidateToken = localStorage.getItem("token");
+  const candidateToken = localStorage.getItem("candidateToken");
   const token = adminToken || candidateToken;
 
   if (token) {

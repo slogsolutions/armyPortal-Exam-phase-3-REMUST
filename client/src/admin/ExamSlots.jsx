@@ -3,15 +3,12 @@ import api from "../api/api";
 import "./ExamSlots.css";
 
 const EMPTY_FORM = {
+  commandId: "",
+  centerId: "",
   tradeId: "",
   paperType: "",
-  examPaperId: "",
   startTime: "",
   endTime: "",
-  maxCandidates: 50,
-  location: "",
-  instructions: "",
-  password: "",
   isActive: true
 };
 
@@ -30,6 +27,8 @@ const PAPER_TYPE_FIELDS = [
 export default function ExamSlots() {
   const [slots, setSlots] = useState([]);
   const [trades, setTrades] = useState([]);
+  const [commands, setCommands] = useState([]);
+  const [centers, setCenters] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +53,8 @@ export default function ExamSlots() {
 
       setSlots(Array.isArray(slotsRes.data) ? slotsRes.data : []);
       setTrades(Array.isArray(mastersRes.data?.trades) ? mastersRes.data.trades : []);
+      setCommands(Array.isArray(mastersRes.data?.commands) ? mastersRes.data.commands : []);
+      setCenters(Array.isArray(mastersRes.data?.centers) ? mastersRes.data.centers : []);
     } catch (err) {
       console.error("Failed to load exam slots", err);
       setError(err.response?.data?.error || "Failed to load exam slots");
@@ -61,6 +62,16 @@ export default function ExamSlots() {
       setLoading(false);
     }
   };
+
+  const selectedCommand = useMemo(
+    () => commands.find((command) => command.id === Number(form.commandId)),
+    [commands, form.commandId]
+  );
+
+  const filteredCenters = useMemo(() => {
+    if (!form.commandId) return [];
+    return centers.filter((center) => center.commandId === Number(form.commandId));
+  }, [centers, form.commandId]);
 
   const selectedTrade = useMemo(
     () => trades.find((trade) => trade.id === Number(form.tradeId)),
@@ -80,18 +91,28 @@ export default function ExamSlots() {
     setError("");
   };
 
+  const handleCommandChange = (commandId) => {
+    setForm((prev) => ({
+      ...prev,
+      commandId,
+      centerId: "",
+      tradeId: "",
+      paperType: ""
+    }));
+    setPaperMessage("");
+  };
+
   const handleTradeChange = (tradeId) => {
     setForm((prev) => ({
       ...prev,
       tradeId,
-      paperType: "",
-      examPaperId: ""
+      paperType: ""
     }));
     setPaperMessage("");
   };
 
   const handlePaperTypeChange = async (paperType) => {
-    setForm((prev) => ({ ...prev, paperType, examPaperId: "" }));
+    setForm((prev) => ({ ...prev, paperType }));
     setPaperMessage("");
 
     if (!paperType || !form.tradeId) {
@@ -101,19 +122,24 @@ export default function ExamSlots() {
     setCheckingPaper(true);
     try {
       const res = await api.get(`/exam/paper/${form.tradeId}/${paperType}`);
-      if (res.data?.id) {
-        setForm((prev) => ({ ...prev, examPaperId: res.data.id }));
-        const questionCount = Array.isArray(res.data.questions) ? res.data.questions.length : 0;
-        const title = res.data.title || `${paperType} Paper`;
-        setPaperMessage(`${title} • ${questionCount} questions`);
+      if (res.data?.questions?.length > 0) {
+        const questionCount = res.data.questions.length;
+        setPaperMessage(`${questionCount} questions available`);
       } else if (res.data?.status === "NA") {
-        setPaperMessage("No active exam paper uploaded for the selected trade and paper type.");
+        setPaperMessage("No question bank uploaded for the selected trade and paper type.");
       } else {
-        setPaperMessage("Unable to verify exam paper for the selected trade.");
+        const questionCount = Array.isArray(res.data?.questions)
+          ? res.data.questions.length
+          : res.data?._count?.questions;
+        if (typeof questionCount === "number" && questionCount > 0) {
+          setPaperMessage(`${questionCount} questions available`);
+        } else {
+          setPaperMessage("Unable to verify question availability for the selected trade.");
+        }
       }
     } catch (err) {
       console.error("Failed to load exam paper", err);
-      setPaperMessage("Failed to load exam paper. Please ensure a paper is uploaded.");
+      setPaperMessage("Failed to load questions. Please ensure a question bank is uploaded.");
     } finally {
       setCheckingPaper(false);
     }
@@ -124,15 +150,12 @@ export default function ExamSlots() {
     setShowForm(true);
 
     setForm({
+      commandId: String(slot.commandId ?? slot.command?.id ?? ""),
+      centerId: String(slot.centerId ?? slot.center?.id ?? ""),
       tradeId: String(slot.tradeId ?? ""),
       paperType: slot.paperType || "",
-      examPaperId: slot.examPaperId ? String(slot.examPaperId) : "",
       startTime: formatDateTimeLocal(slot.startTime),
       endTime: formatDateTimeLocal(slot.endTime),
-      maxCandidates: slot.maxCandidates || 50,
-      location: slot.location || "",
-      instructions: slot.instructions || "",
-      password: slot.password || "",
       isActive: Boolean(slot.isActive)
     });
 
@@ -160,7 +183,7 @@ export default function ExamSlots() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!form.tradeId || !form.paperType || !form.startTime || !form.endTime) {
+    if (!form.commandId || !form.centerId || !form.tradeId || !form.paperType || !form.startTime || !form.endTime) {
       setError("Please complete all required fields.");
       return;
     }
@@ -169,15 +192,12 @@ export default function ExamSlots() {
     setError("");
 
     const payload = {
+      commandId: Number(form.commandId),
+      centerId: Number(form.centerId),
       tradeId: Number(form.tradeId),
       paperType: form.paperType,
-      examPaperId: form.examPaperId ? Number(form.examPaperId) : null,
       startTime: new Date(form.startTime).toISOString(),
       endTime: new Date(form.endTime).toISOString(),
-      maxCandidates: Number(form.maxCandidates) || 0,
-      location: form.location,
-      instructions: form.instructions,
-      password: form.password,
       isActive: Boolean(form.isActive)
     };
 
@@ -228,11 +248,47 @@ export default function ExamSlots() {
             <form onSubmit={handleSubmit}>
               <div className="form-row">
                 <div className="form-group">
+                  <label>Command *</label>
+                  <select
+                    value={form.commandId}
+                    onChange={(e) => handleCommandChange(e.target.value)}
+                    required
+                  >
+                    <option value="">Select Command</option>
+                    {commands.map((command) => (
+                      <option key={command.id} value={command.id}>
+                        {command.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Conducting Center *</label>
+                  <select
+                    value={form.centerId}
+                    onChange={(e) => setForm((prev) => ({ ...prev, centerId: e.target.value }))}
+                    required
+                    disabled={!form.commandId}
+                  >
+                    <option value="">Select Center</option>
+                    {filteredCenters.map((center) => (
+                      <option key={center.id} value={center.id}>
+                        {center.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
                   <label>Trade *</label>
                   <select
                     value={form.tradeId}
                     onChange={(e) => handleTradeChange(e.target.value)}
                     required
+                    disabled={!form.commandId}
                   >
                     <option value="">Select Trade</option>
                     {trades.map((trade) => (
@@ -288,53 +344,6 @@ export default function ExamSlots() {
               </div>
 
               <div className="form-row">
-                <div className="form-group">
-                  <label>Max Candidates *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="200"
-                    value={form.maxCandidates}
-                    onChange={(e) => setForm((prev) => ({ ...prev, maxCandidates: Number(e.target.value) }))}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Location *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Exam Hall A"
-                    value={form.location}
-                    onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group full-width">
-                  <label>Instructions</label>
-                  <textarea
-                    placeholder="Special instructions for candidates"
-                    value={form.instructions}
-                    onChange={(e) => setForm((prev) => ({ ...prev, instructions: e.target.value }))}
-                    rows="3"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Exam Password</label>
-                  <input
-                    type="password"
-                    placeholder="Optional password"
-                    value={form.password}
-                    onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-                  />
-                </div>
-
                 <div className="form-group inline-checkbox">
                   <label>
                     <input
@@ -385,25 +394,18 @@ export default function ExamSlots() {
                 </div>
 
                 <div className="slot-details">
+                  <p><strong>Command:</strong> {slot.command?.name || "—"}</p>
+                  <p><strong>Center:</strong> {slot.center?.name || "—"}</p>
                   <p><strong>Paper Type:</strong> {slot.paperType}</p>
-                  <p><strong>Exam Paper:</strong> {slot.examPaper?.title || "Not linked"}</p>
-                  <p><strong>Questions:</strong> {slot.examPaper?.questionCount ?? slot.examPaper?.questions?.length ?? 0}</p>
+                  <p><strong>Questions:</strong> {slot.questionCount ?? 0}</p>
                   <p><strong>Start:</strong> {new Date(slot.startTime).toLocaleString()}</p>
                   <p><strong>End:</strong> {new Date(slot.endTime).toLocaleString()}</p>
-                  <p><strong>Location:</strong> {slot.location || "—"}</p>
-                  <p><strong>Capacity:</strong> {slot.currentCount || 0} / {slot.maxCandidates}</p>
-                  {slot.password && <p><strong>🔒 Password Protected</strong></p>}
                 </div>
 
-                {slot.instructions && (
-                  <div className="slot-instructions">
-                    <strong>Instructions:</strong>
-                    <p>{slot.instructions}</p>
-                  </div>
-                )}
-
                 <div className="slot-actions">
-                  <button onClick={() => handleEdit(slot)}>Edit</button>
+                  <button className="btn btn-info btn-sm" onClick={() => handleEdit(slot)}>
+                    Edit
+                  </button>
                   <button className="delete-btn" onClick={() => handleDelete(slot.id)}>
                     Delete
                   </button>

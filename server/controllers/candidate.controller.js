@@ -15,6 +15,7 @@ exports.register = async (req, res) => {
       rankId,
       tradeId,
       commandId,
+      centerId,
       selectedExamTypes
     } = req.body;
 
@@ -48,7 +49,8 @@ exports.register = async (req, res) => {
         selectedExamTypes: JSON.stringify(selectedExamTypes),
         rankId: Number(rankId),
         tradeId: Number(tradeId),
-        commandId: Number(commandId)
+        commandId: Number(commandId),
+        centerId: centerId ? Number(centerId) : null
       }
     });
 
@@ -64,13 +66,52 @@ exports.register = async (req, res) => {
   }
 };
 
+/* ================= PEEK CANDIDATE (PUBLIC) ================= */
+
+exports.peek = async (req, res) => {
+  try {
+    const { armyNo } = req.body;
+
+    if (!armyNo) {
+      return res.status(400).json({ candidate: null, error: "Army number required" });
+    }
+
+    const candidate = await prisma.candidate.findUnique({
+      where: { armyNo },
+      include: {
+        trade: true,
+        command: true,
+        center: true
+      }
+    });
+
+    if (!candidate) {
+      return res.json({ candidate: null });
+    }
+
+    res.json({
+      candidate: {
+        id: candidate.id,
+        armyNo: candidate.armyNo,
+        name: candidate.name,
+        trade: candidate.trade ? { id: candidate.trade.id, name: candidate.trade.name } : null,
+        command: candidate.command ? { id: candidate.command.id, name: candidate.command.name } : null,
+        center: candidate.center ? { id: candidate.center.id, name: candidate.center.name } : null,
+        selectedExamTypes: JSON.parse(candidate.selectedExamTypes || "[]")
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ candidate: null, error: error.message });
+  }
+};
+
 /* ================= LOGIN CANDIDATE ================= */
 
 exports.login = async (req, res) => {
   try {
     console.log('🔐 Candidate login attempt:', req.body);
     
-    const { armyNo, dob } = req.body;
+    const { armyNo, dob, paperType } = req.body;
 
     if (!armyNo || !dob) {
       console.log('❌ Missing credentials');
@@ -85,7 +126,8 @@ exports.login = async (req, res) => {
       include: {
         rank: true,
         trade: true,
-        command: true
+        command: true,
+        center: true
       }
     });
 
@@ -107,6 +149,31 @@ exports.login = async (req, res) => {
         success: false,
         error: "Invalid army number or date of birth"
       });
+    }
+
+    const selectedTypes = JSON.parse(candidate.selectedExamTypes || "[]");
+    let activePaperType = paperType || null;
+
+    if (selectedTypes.length === 0) {
+      activePaperType = null;
+    } else if (selectedTypes.length === 1) {
+      activePaperType = selectedTypes[0];
+    } else {
+      if (!activePaperType) {
+        return res.status(400).json({
+          success: false,
+          error: "Please select the written paper you wish to attempt",
+          requiredPapers: selectedTypes
+        });
+      }
+
+      if (!selectedTypes.includes(activePaperType)) {
+        return res.status(400).json({
+          success: false,
+          error: "Selected paper type is not registered for this candidate",
+          requiredPapers: selectedTypes
+        });
+      }
     }
 
     // Create a simple token for candidate
@@ -131,7 +198,10 @@ exports.login = async (req, res) => {
         name: candidate.name,
         rank: candidate.rank,
         trade: candidate.trade,
-        command: candidate.command
+        command: candidate.command,
+        center: candidate.center,
+        selectedExamTypes: selectedTypes,
+        activePaperType
       }
     });
   } catch (err) {

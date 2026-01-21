@@ -397,6 +397,7 @@ exports.bulkUploadPapers = async (req, res) => {
 
     const results = [];
     const errors = [];
+    const attemptStats = new Map();
 
     // Cache trades to support case-insensitive matching without Prisma mode option
     const tradeRecords = await prisma.trade.findMany({
@@ -456,6 +457,20 @@ exports.bulkUploadPapers = async (req, res) => {
       }
     }
 
+    const getSummaryEntry = (tradeNameKey, displayName, paperType) => {
+      const key = `${tradeNameKey}|${paperType}`;
+      if (!attemptStats.has(key)) {
+        attemptStats.set(key, {
+          tradeName: displayName || "UNKNOWN",
+          paperType,
+          attempted: 0,
+          created: 0,
+          errors: 0
+        });
+      }
+      return attemptStats.get(key);
+    };
+
     for (let row of data) {
       try {
         // Expected columns: Trade, PaperType, Question, OptionA, OptionB, OptionC, OptionD, CorrectAnswer, Marks
@@ -469,8 +484,13 @@ exports.bulkUploadPapers = async (req, res) => {
         const correctAnswer = (row.CorrectAnswer || row.correctAnswer || row['Correct Answer'] || '').toString().toUpperCase();
         const marks = parseFloat(row.Marks || row.marks || 1.0);
 
+        const normalizedTradeName = (tradeName || "").trim();
+        const summaryEntry = getSummaryEntry(sanitize(normalizedTradeName), normalizedTradeName || tradeName, paperType);
+        summaryEntry.attempted += 1;
+
         if (!tradeName || !paperType || !questionText) {
           errors.push({ row, error: "Missing required fields (Trade, PaperType, Question)" });
+          summaryEntry.errors += 1;
           continue;
         }
 
@@ -478,10 +498,10 @@ exports.bulkUploadPapers = async (req, res) => {
         const validPaperTypes = ["WP-I", "WP-II", "WP-III", "PR-I", "PR-II", "PR-III", "PR-IV", "PR-V", "ORAL"];
         if (!validPaperTypes.includes(paperType)) {
           errors.push({ row, error: `Invalid paper type: ${paperType}. Valid types: ${validPaperTypes.join(', ')}` });
+          summaryEntry.errors += 1;
           continue;
         }
 
-        const normalizedTradeName = (tradeName || "").trim();
         const tradeLower = normalizedTradeName.toLowerCase();
         const normalizedRoman = digitsToRoman(normalizedTradeName);
         const normalizedDigits = romanToDigits(normalizedTradeName);
@@ -523,8 +543,12 @@ exports.bulkUploadPapers = async (req, res) => {
 
         if (!trade) {
           errors.push({ row, error: `Trade not found: ${tradeName}` });
+          summaryEntry.errors += 1;
           continue;
         }
+
+        // Update summary entry with canonical trade name if available
+        summaryEntry.tradeName = trade.name;
 
         // Check if paper type is enabled for this trade
         const paperTypeMap = {
@@ -545,6 +569,7 @@ exports.bulkUploadPapers = async (req, res) => {
           console.log("📑 Trade paper toggle", { tradeId: trade.id, tradeName: trade.name, paperType, tradeField, fieldEnabled });
           if (!fieldEnabled) {
             errors.push({ row, error: `${paperType} is not enabled for trade ${trade.name}` });
+            summaryEntry.errors += 1;
             continue;
           }
         }
@@ -571,6 +596,7 @@ exports.bulkUploadPapers = async (req, res) => {
         // For practical and oral exams, we don't create papers, just validate
         if (!paper && !paperType.startsWith('WP')) {
           results.push({ trade: tradeName, paperType, message: "Validated practical/oral exam type" });
+          summaryEntry.created += 1;
           continue;
         }
 
@@ -602,10 +628,17 @@ exports.bulkUploadPapers = async (req, res) => {
             order: question.questionOrder
           });
           results.push({ trade: tradeName, paperType, questionId: question.id });
+          summaryEntry.created += 1;
         }
       } catch (err) {
         console.error("❌ Row processing failed", { row, error: err.message });
         errors.push({ row, error: err.message });
+        const tradeName = row.Trade || row.trade || "UNKNOWN";
+        const paperType = normalizePaperType(row.PaperType || row.paperType || row['Paper Type']);
+        const normalizedTradeName = (tradeName || "").trim();
+        const summaryEntry = getSummaryEntry(sanitize(normalizedTradeName), normalizedTradeName || tradeName, paperType);
+        summaryEntry.attempted += 1;
+        summaryEntry.errors += 1;
       }
     }
 
@@ -615,25 +648,47 @@ exports.bulkUploadPapers = async (req, res) => {
       errors: errors.length
     });
 
+    const summary = Array.from(attemptStats.values()).map((entry) => ({
+      ...entry,
+      pending: Math.max(entry.attempted - entry.created, 0)
+    }));
+
+    const errorBreakdown = Array.from(
+      errors.reduce((acc, curr) => {
+        const reason = curr.error || "Unknown error";
+        acc.set(reason, (acc.get(reason) || 0) + 1);
+        return acc;
+      }, new Map())
+    ).map(([reason, count]) => ({ reason, count }));
+
     const responsePayload = {
-      success: results.length > 0 && errors.length === 0,
+      success: false,
       uploaded: results.length,
       errorCount: errors.length,
+      totalRows: data.length,
       results,
+      summary,
+      errorBreakdown,
       errorSamples: errors.slice(0, 10)
     };
 
+    let status = "failed";
     if (results.length === 0) {
-      responsePayload.success = false;
       responsePayload.message = "No questions were created. See errorSamples for details.";
+      responsePayload.status = status;
       return res.status(400).json(responsePayload);
     }
 
     if (errors.length > 0) {
+      status = "partial";
       responsePayload.message = `Uploaded ${results.length} questions with ${errors.length} errors.`;
+      responsePayload.status = status;
       return res.status(207).json(responsePayload);
     }
 
+    status = "success";
+    responsePayload.success = true;
+    responsePayload.status = status;
     responsePayload.message = "All questions uploaded successfully.";
     res.json(responsePayload);
   } catch (error) {

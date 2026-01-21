@@ -2,6 +2,8 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AdminLogin from "./auth/AdminLogin";
 import CandidateLogin from "./auth/CandidateLogin";
 import Register from "./candidate/Register";
+import CandidateDashboard from "./candidate/CandidateDashboard";
+import Instructions from "./candidate/Instructions";
 import AdminDashboard from "./admin/AdminDashboard";
 import Masters from "./admin/Masters";
 import TradeConfig from "./admin/TradeConfig";
@@ -26,6 +28,8 @@ function App() {
         <Route path="/admin/*" element={<AdminDashboard />} />
         
         {/* Candidate Routes */}
+        <Route path="/candidate/dashboard" element={<CandidateDashboard />} />
+        <Route path="/candidate/instructions" element={<Instructions />} />
         <Route path="/candidate/exam" element={<Exam />} />
         <Route path="/candidate/result" element={<Result />} />
       </Routes>

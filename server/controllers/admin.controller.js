@@ -140,20 +140,42 @@ exports.deleteTrade = async (req, res) => {
 
 exports.getMasters = async (req, res) => {
   try {
-    const [ranks, trades, commands] = await Promise.all([
+    const [ranks, trades, commands, centers] = await Promise.all([
       prisma.rank.findMany({ orderBy: { name: "asc" } }),
       prisma.trade.findMany({ orderBy: { name: "asc" } }),
-      prisma.command.findMany({ orderBy: { name: "asc" } })
+      prisma.command.findMany({ orderBy: { name: "asc" } }),
+      prisma.conductingCenter.findMany({
+        orderBy: [{ commandId: "asc" }, { name: "asc" }],
+        include: { command: true }
+      })
     ]);
 
     res.json({
       ranks,
       trades,
-      commands
+      commands,
+      centers
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to load master data" });
+  }
+};
+
+exports.getCenters = async (req, res) => {
+  try {
+    const { commandId } = req.query;
+
+    const centers = await prisma.conductingCenter.findMany({
+      where: commandId ? { commandId: Number(commandId) } : undefined,
+      orderBy: { name: "asc" },
+      include: { command: true }
+    });
+
+    res.json(centers);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load conducting centers" });
   }
 };
 

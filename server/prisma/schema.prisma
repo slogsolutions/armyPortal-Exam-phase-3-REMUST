@@ -26,6 +26,20 @@ model Command {
   name String @unique
 
   candidates Candidate[]
+  centers    ConductingCenter[]
+  examSlots  ExamSlot[]
+}
+
+model ConductingCenter {
+  id        Int    @id @default(autoincrement())
+  name      String
+  commandId Int
+
+  command   Command @relation(fields: [commandId], references: [id])
+  candidates Candidate[]
+  examSlots  ExamSlot[]
+
+  @@unique([commandId, name])
 }
 
 model Trade {
@@ -66,10 +80,12 @@ model Candidate {
   rankId    Int
   tradeId   Int
   commandId Int
+  centerId  Int?
 
   rank    Rank             @relation(fields: [rankId], references: [id])
   trade   Trade            @relation(fields: [tradeId], references: [id])
   command Command          @relation(fields: [commandId], references: [id])
+  center  ConductingCenter? @relation(fields: [centerId], references: [id])
 
   examAttempts ExamAttempt[]
   practicalMarks PracticalMarks?
@@ -87,7 +103,6 @@ model ExamPaper {
   trade      Trade       @relation(fields: [tradeId], references: [id])
   questions  Question[]
   examAttempts ExamAttempt[]
-  examSlots  ExamSlot[]
 
   @@unique([tradeId, paperType])
 }
@@ -160,21 +175,19 @@ model PracticalMarks {
 model ExamSlot {
   id          Int       @id @default(autoincrement())
   tradeId     Int
-  examPaperId Int?
   paperType   String    // WP-I, WP-II, WP-III, PR-I, PR-II, PR-III, PR-IV, PR-V, ORAL
   startTime   DateTime
   endTime     DateTime
-  maxCandidates Int      @default(50)
+  commandId   Int
+  centerId    Int
   currentCount Int      @default(0)
   isActive    Boolean   @default(true)
-  location    String?   // Exam location/center details
-  instructions String?  // Special instructions for this slot
-  password    String?   // Password for encrypted exam files
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   trade     Trade       @relation(fields: [tradeId], references: [id])
-  examPaper ExamPaper?  @relation(fields: [examPaperId], references: [id])
+  command   Command     @relation(fields: [commandId], references: [id])
+  center    ConductingCenter @relation(fields: [centerId], references: [id])
   candidates Candidate[]
   examAttempts ExamAttempt[]
 

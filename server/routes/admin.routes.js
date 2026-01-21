@@ -29,6 +29,7 @@ router.delete("/command/:id", isAuth(["ADMIN"]), ctrl.deleteCommand);
 /* ===== GET DROPDOWN DATA (PUBLIC) ===== */
 router.get("/masters", ctrl.getMasters);
 router.get("/trades", ctrl.getTrades);
+router.get("/centers", ctrl.getCenters);
 
 /* ===== BULK OPERATIONS (ADMIN ONLY) ===== */
 router.post("/trades/bulk", isAuth(["ADMIN"]), ctrl.bulkConfigureTrades);

@@ -1,4 +1,5 @@
 const prisma = require("../config/prisma");
+const { attachQuestionCounts, attachQuestionCount } = require("../utils/questionCounts");
 
 /**
  * Create exam slot
@@ -7,15 +8,16 @@ exports.createExamSlot = async (req, res) => {
   try {
     const {
       tradeId,
-      examPaperId,
       paperType,
       startTime,
       endTime,
-      maxCandidates,
-      location,
-      instructions,
-      password
+      commandId,
+      centerId
     } = req.body;
+
+    if (!tradeId || !paperType || !startTime || !endTime || !commandId || !centerId) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
     // Validate trade exists
     const trade = await prisma.trade.findUnique({
@@ -46,36 +48,48 @@ exports.createExamSlot = async (req, res) => {
       });
     }
 
-    // Validate exam paper if provided
-    if (examPaperId) {
-      const examPaper = await prisma.examPaper.findUnique({
-        where: { id: Number(examPaperId) }
-      });
-      
-      if (!examPaper) {
-        return res.status(404).json({ error: "Exam paper not found" });
-      }
+    // Validate command
+    const command = await prisma.command.findUnique({
+      where: { id: Number(commandId) }
+    });
+
+    if (!command) {
+      return res.status(404).json({ error: "Command not found" });
+    }
+
+    // Validate conducting center and ensure it belongs to command
+    const center = await prisma.conductingCenter.findUnique({
+      where: { id: Number(centerId) },
+      include: { command: true }
+    });
+
+    if (!center) {
+      return res.status(404).json({ error: "Conducting center not found" });
+    }
+
+    if (center.commandId !== Number(commandId)) {
+      return res.status(400).json({ error: "Center does not belong to selected command" });
     }
 
     const examSlot = await prisma.examSlot.create({
       data: {
         tradeId: Number(tradeId),
-        examPaperId: examPaperId ? Number(examPaperId) : null,
         paperType,
         startTime: new Date(startTime),
         endTime: new Date(endTime),
-        maxCandidates: Number(maxCandidates) || 50,
-        location,
-        instructions,
-        password
+        commandId: Number(commandId),
+        centerId: Number(centerId)
       },
       include: {
         trade: true,
-        examPaper: true
+        command: true,
+        center: true
       }
     });
 
-    res.json(examSlot);
+    const enrichedSlot = await attachQuestionCount(examSlot, prisma);
+
+    res.json(enrichedSlot);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -86,12 +100,20 @@ exports.createExamSlot = async (req, res) => {
  */
 exports.getExamSlots = async (req, res) => {
   try {
-    const { tradeId, paperType, upcoming } = req.query;
+    const { tradeId, paperType, upcoming, commandId, centerId } = req.query;
 
     let whereClause = {};
     
     if (tradeId) {
       whereClause.tradeId = Number(tradeId);
+    }
+    
+    if (commandId) {
+      whereClause.commandId = Number(commandId);
+    }
+    
+    if (centerId) {
+      whereClause.centerId = Number(centerId);
     }
     
     if (paperType) {
@@ -104,11 +126,12 @@ exports.getExamSlots = async (req, res) => {
       };
     }
 
-    const examSlots = await prisma.examSlot.findMany({
+    const examSlotsRaw = await prisma.examSlot.findMany({
       where: whereClause,
       include: {
         trade: true,
-        examPaper: true,
+        command: true,
+        center: true,
         _count: {
           select: { 
             candidates: true,
@@ -120,6 +143,8 @@ exports.getExamSlots = async (req, res) => {
         startTime: 'asc'
       }
     });
+
+    const examSlots = await attachQuestionCounts(examSlotsRaw, prisma);
 
     res.json(examSlots);
   } catch (error) {
@@ -136,7 +161,7 @@ exports.getAvailableSlots = async (req, res) => {
 
     const candidate = await prisma.candidate.findUnique({
       where: { id: Number(candidateId) },
-      include: { trade: true }
+      include: { trade: true, command: true, center: true }
     });
 
     if (!candidate) {
@@ -149,17 +174,19 @@ exports.getAvailableSlots = async (req, res) => {
       : [];
 
     // Get available slots for candidate's trade and selected exam types
-    const availableSlots = await prisma.examSlot.findMany({
+    const availableSlotsRaw = await prisma.examSlot.findMany({
       where: {
         tradeId: candidate.tradeId,
         paperType: { in: selectedTypes },
         startTime: { gte: new Date() },
         isActive: true,
-        currentCount: { lt: prisma.examSlot.fields.maxCandidates }
+        commandId: candidate.commandId,
+        ...(candidate.centerId ? { centerId: candidate.centerId } : {})
       },
       include: {
         trade: true,
-        examPaper: true,
+        command: true,
+        center: true,
         _count: {
           select: { 
             candidates: true,
@@ -171,6 +198,8 @@ exports.getAvailableSlots = async (req, res) => {
         startTime: 'asc'
       }
     });
+
+    const availableSlots = await attachQuestionCounts(availableSlotsRaw, prisma);
 
     res.json(availableSlots);
   } catch (error) {
@@ -188,7 +217,7 @@ exports.assignToSlot = async (req, res) => {
     // Validate candidate
     const candidate = await prisma.candidate.findUnique({
       where: { id: Number(candidateId) },
-      include: { trade: true }
+      include: { trade: true, command: true, center: true }
     });
 
     if (!candidate) {
@@ -198,16 +227,20 @@ exports.assignToSlot = async (req, res) => {
     // Validate slot
     const slot = await prisma.examSlot.findUnique({
       where: { id: Number(slotId) },
-      include: { trade: true }
+      include: { trade: true, command: true, center: true }
     });
 
     if (!slot) {
       return res.status(404).json({ error: "Exam slot not found" });
     }
 
-    // Check if slot is full
-    if (slot.currentCount >= slot.maxCandidates) {
-      return res.status(400).json({ error: "Exam slot is full" });
+    // Ensure candidate belongs to the same command (and center if provided)
+    if (candidate.commandId !== slot.commandId) {
+      return res.status(403).json({ error: "Candidate does not belong to the slot's command" });
+    }
+
+    if (candidate.centerId && candidate.centerId !== slot.centerId) {
+      return res.status(403).json({ error: "Candidate is not assigned to this conducting center" });
     }
 
     // Check if slot has started
@@ -252,24 +285,89 @@ exports.assignToSlot = async (req, res) => {
 exports.updateExamSlot = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const {
+      tradeId,
+      paperType,
+      startTime,
+      endTime,
+      commandId,
+      centerId
+    } = req.body;
 
-    // Convert date fields
-    if (updateData.startTime) {
-      updateData.startTime = new Date(updateData.startTime);
-    }
-    if (updateData.endTime) {
-      updateData.endTime = new Date(updateData.endTime);
+    const existingSlot = await prisma.examSlot.findUnique({
+      where: { id: Number(id) }
+    });
+
+    if (!existingSlot) {
+      return res.status(404).json({ error: "Exam slot not found" });
     }
 
-    const examSlot = await prisma.examSlot.update({
+    const resolvedTradeId = tradeId ? Number(tradeId) : existingSlot.tradeId;
+    const resolvedPaperType = paperType || existingSlot.paperType;
+    const resolvedCommandId = commandId ? Number(commandId) : existingSlot.commandId;
+    const resolvedCenterId = centerId ? Number(centerId) : existingSlot.centerId;
+
+    const trade = await prisma.trade.findUnique({ where: { id: resolvedTradeId } });
+    if (!trade) {
+      return res.status(404).json({ error: "Trade not found" });
+    }
+
+    // Validate paper type for trade
+    const paperTypeMap = {
+      'WP-I': 'wp1',
+      'WP-II': 'wp2', 
+      'WP-III': 'wp3',
+      'PR-I': 'pr1',
+      'PR-II': 'pr2',
+      'PR-III': 'pr3',
+      'PR-IV': 'pr4',
+      'PR-V': 'pr5',
+      'ORAL': 'oral'
+    };
+
+    const tradeField = paperTypeMap[resolvedPaperType];
+    if (tradeField && !trade[tradeField]) {
+      return res.status(400).json({ error: `${resolvedPaperType} is not enabled for trade ${trade.name}` });
+    }
+
+    const command = await prisma.command.findUnique({ where: { id: resolvedCommandId } });
+    if (!command) {
+      return res.status(404).json({ error: "Command not found" });
+    }
+
+    const center = await prisma.conductingCenter.findUnique({
+      where: { id: resolvedCenterId },
+      include: { command: true }
+    });
+
+    if (!center) {
+      return res.status(404).json({ error: "Conducting center not found" });
+    }
+
+    if (center.commandId !== resolvedCommandId) {
+      return res.status(400).json({ error: "Center does not belong to selected command" });
+    }
+
+    const updatePayload = {
+      tradeId: resolvedTradeId,
+      paperType: resolvedPaperType,
+      commandId: resolvedCommandId,
+      centerId: resolvedCenterId,
+      ...(startTime ? { startTime: new Date(startTime) } : {}),
+      ...(endTime ? { endTime: new Date(endTime) } : {})
+    };
+
+    const examSlotRaw = await prisma.examSlot.update({
       where: { id: Number(id) },
-      data: updateData,
+      data: updatePayload,
       include: {
         trade: true,
-        examPaper: true
+        command: true,
+        center: true
       }
     });
+
+    const examSlot = await attachQuestionCount(examSlotRaw, prisma);
 
     res.json(examSlot);
   } catch (error) {
@@ -321,11 +419,12 @@ exports.getSlotDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const slot = await prisma.examSlot.findUnique({
+    const slotRaw = await prisma.examSlot.findUnique({
       where: { id: Number(id) },
       include: {
         trade: true,
-        examPaper: true,
+        command: true,
+        center: true,
         candidates: {
           include: {
             rank: true,
@@ -341,9 +440,11 @@ exports.getSlotDetails = async (req, res) => {
       }
     });
 
-    if (!slot) {
+    if (!slotRaw) {
       return res.status(404).json({ error: "Exam slot not found" });
     }
+
+    const slot = await attachQuestionCount(slotRaw, prisma);
 
     res.json(slot);
   } catch (error) {
