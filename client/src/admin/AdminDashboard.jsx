@@ -43,48 +43,43 @@ export default function AdminDashboard() {
     {
       id: "masters",
       label: "Master Data",
-      icon: "📊",
-      subItems: [
-        { id: "ranks", label: "Ranks", path: "/admin/masters" },
-        { id: "trades", label: "Trades", path: "/admin/masters" },
-        { id: "commands", label: "Commands", path: "/admin/masters" },
-        { id: "paper-types", label: "Paper Types", path: "/admin/masters" }
-      ]
+      icon: "⚪",
+      path: "/admin/masters"
     },
-    {
-      id: "trade-config",
-      label: "Trade Configuration",
-      icon: "⚙️",
-      path: "/admin/trade-config"
-    },
+    // {
+    //   id: "trade-config",
+    //   label: "Trade Configuration",
+    //   icon: "⚪",
+    //   path: "/admin/trade-config"
+    // },
     {
       id: "upload-paper",
       label: "Upload Papers",
-      icon: "📤",
+      icon: "⚪",
       path: "/admin/upload-paper"
     },
     {
       id: "exam-slots",
       label: "Exam Slots",
-      icon: "📅",
+      icon: "⚪",
       path: "/admin/exam-slots"
     },
     {
       id: "practical-marks",
       label: "Practical Marks",
-      icon: "✏️",
+      icon: "⚪",
       path: "/admin/practical-marks"
     },
     {
       id: "candidates",
       label: "Candidates",
-      icon: "🧑‍🎓",
+      icon: "⚪",
       path: "/admin/candidates"
     },
     {
       id: "results",
       label: "Results",
-      icon: "📈",
+      icon: "⚪",
       path: "/admin/results"
     }
   ];
@@ -112,15 +107,14 @@ export default function AdminDashboard() {
 
   return (
     <div className="admin-dashboard">
-      {/* Sidebar */}
-      <div className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
+      <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-header">
           <div className="logo-section">
             <h2>ADMIN PANEL</h2>
             <h3>2 Signal Training Centre</h3>
           </div>
           <button className="sidebar-toggle" onClick={toggleSidebar}>
-            {sidebarOpen ? "◀" : "▶"}
+            {sidebarOpen ? "" : ""}
           </button>
         </div>
 
@@ -135,7 +129,7 @@ export default function AdminDashboard() {
                 <span className="nav-label">{item.label}</span>
                 {item.subItems && (
                   <span className="nav-arrow">
-                    {activeTab === item.id ? "▼" : "▶"}
+                    {activeTab === item.id ? "" : ""}
                   </span>
                 )}
               </div>
@@ -160,21 +154,22 @@ export default function AdminDashboard() {
 
         <div className="sidebar-footer">
           <button className="logout-btn" onClick={logout}>
-            🚪 Logout
+            Logout
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* Main Content */}
       <div className={`main-content ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
-        <div className="content-header">
-          <h1>
-            {menuItems.find(item => item.id === activeTab)?.label || "Dashboard"}
-          </h1>
+        <header className="content-header">
+          <div className="breadcrumbs">
+            <span>Admin</span>
+            <span>/</span>
+            <span>{menuItems.find((item) => item.id === activeTab)?.label || "Dashboard"}</span>
+          </div>
           <button className="mobile-sidebar-toggle" onClick={toggleSidebar}>
-            ☰
+            {sidebarOpen ? "Close" : "Menu"}
           </button>
-        </div>
+        </header>
 
         <div className="content-area">
           <Routes>

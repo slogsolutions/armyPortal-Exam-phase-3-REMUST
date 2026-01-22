@@ -37,6 +37,7 @@ export default function ExamSlots() {
   const [error, setError] = useState("");
   const [paperMessage, setPaperMessage] = useState("");
   const [checkingPaper, setCheckingPaper] = useState(false);
+  const [filters, setFilters] = useState({ commandId: "", tradeId: "", status: "" });
 
   useEffect(() => {
     fetchData();
@@ -83,6 +84,23 @@ export default function ExamSlots() {
     return PAPER_TYPE_FIELDS.filter(({ field }) => Boolean(selectedTrade[field]));
   }, [selectedTrade]);
 
+  const filteredSlots = useMemo(() => {
+    return slots.filter((slot) => {
+      const matchesCommand = filters.commandId
+        ? Number(filters.commandId) === Number(slot.commandId || slot.command?.id)
+        : true;
+      const matchesTrade = filters.tradeId
+        ? Number(filters.tradeId) === Number(slot.tradeId)
+        : true;
+      const matchesStatus = filters.status
+        ? filters.status === (slot.isActive ? "active" : "inactive")
+        : true;
+      return matchesCommand && matchesTrade && matchesStatus;
+    });
+  }, [slots, filters]);
+
+  const activeCount = useMemo(() => filteredSlots.filter((slot) => slot.isActive).length, [filteredSlots]);
+
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setEditingSlot(null);
@@ -110,6 +128,12 @@ export default function ExamSlots() {
     }));
     setPaperMessage("");
   };
+
+  const handleFilterChange = (field, value) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const clearFilters = () => setFilters({ commandId: "", tradeId: "", status: "" });
 
   const handlePaperTypeChange = async (paperType) => {
     setForm((prev) => ({ ...prev, paperType }));
@@ -239,6 +263,45 @@ export default function ExamSlots() {
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+
+      <div className="slots-filter-bar">
+        <select
+          value={filters.commandId}
+          onChange={(e) => handleFilterChange("commandId", e.target.value)}
+        >
+          <option value="">All Commands</option>
+          {commands.map((command) => (
+            <option key={command.id} value={command.id}>
+              {command.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={filters.tradeId}
+          onChange={(e) => handleFilterChange("tradeId", e.target.value)}
+        >
+          <option value="">All Trades</option>
+          {trades.map((trade) => (
+            <option key={trade.id} value={trade.id}>
+              {trade.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={filters.status}
+          onChange={(e) => handleFilterChange("status", e.target.value)}
+        >
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+
+        <button type="button" className="ghost-btn" onClick={clearFilters}>
+          Reset Filters
+        </button>
+      </div>
 
       {showForm && (
         <div className="slot-form-overlay">
@@ -376,42 +439,68 @@ export default function ExamSlots() {
         </div>
       )}
 
-      <div className="slots-list">
-        {slots.length === 0 ? (
+      <div className="slots-table-card">
+        <div className="slots-table-meta">
+          <span>{filteredSlots.length} slots</span>
+          <span>{activeCount} active</span>
+        </div>
+
+        {filteredSlots.length === 0 ? (
           <div className="no-slots">
             <h3>No Exam Slots Found</h3>
-            <p>Create your first exam slot to get started.</p>
+            <p>Adjust filters or create a new slot to get started.</p>
           </div>
         ) : (
-          <div className="slots-grid">
-            {slots.map((slot) => (
-              <div key={slot.id} className={`slot-card ${slot.isActive ? "active" : "inactive"}`}>
-                <div className="slot-header">
-                  <h4>{slot.trade?.name || "Unknown Trade"}</h4>
-                  <span className={`status ${slot.isActive ? "active" : "inactive"}`}>
-                    {slot.isActive ? "Active" : "Inactive"}
-                  </span>
-                </div>
-
-                <div className="slot-details">
-                  <p><strong>Command:</strong> {slot.command?.name || "—"}</p>
-                  <p><strong>Center:</strong> {slot.center?.name || "—"}</p>
-                  <p><strong>Paper Type:</strong> {slot.paperType}</p>
-                  <p><strong>Questions:</strong> {slot.questionCount ?? 0}</p>
-                  <p><strong>Start:</strong> {new Date(slot.startTime).toLocaleString()}</p>
-                  <p><strong>End:</strong> {new Date(slot.endTime).toLocaleString()}</p>
-                </div>
-
-                <div className="slot-actions">
-                  <button className="btn btn-info btn-sm" onClick={() => handleEdit(slot)}>
-                    Edit
-                  </button>
-                  <button className="delete-btn" onClick={() => handleDelete(slot.id)}>
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="slots-table-wrapper">
+            <table className="slots-table">
+              <thead>
+                <tr>
+                  <th>Slot</th>
+                  <th>Command / Center</th>
+                  <th>Paper & Questions</th>
+                  <th>Window</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSlots.map((slot) => (
+                  <tr key={slot.id}>
+                    <td>
+                      <div className="slot-name">{slot.trade?.name || "Unknown Trade"}</div>
+                      <div className="slot-subtitle">{slot.paperType || "—"}</div>
+                    </td>
+                    <td>
+                      <div className="slot-meta">{slot.command?.name || "—"}</div>
+                      <div className="slot-meta">{slot.center?.name || "—"}</div>
+                    </td>
+                    <td>
+                      <span className="paper-type-pill">{slot.paperType || "—"}</span>
+                      <span className="question-pill">{slot.questionCount ?? 0} Qs</span>
+                    </td>
+                    <td>
+                      <div className="slot-meta">{formatDateTime(slot.startTime)}</div>
+                      <div className="slot-meta">→ {formatDateTime(slot.endTime)}</div>
+                    </td>
+                    <td>
+                      <span className={`status-chip ${slot.isActive ? "active" : "inactive"}`}>
+                        {slot.isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="slot-actions">
+                        <button type="button" className="ghost-btn" onClick={() => handleEdit(slot)}>
+                          Edit
+                        </button>
+                        <button type="button" className="danger-btn" onClick={() => handleDelete(slot.id)}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -425,4 +514,14 @@ function formatDateTimeLocal(value) {
   if (Number.isNaN(date.getTime())) return "";
   const iso = date.toISOString();
   return iso.slice(0, 16);
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  });
 }
