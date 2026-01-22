@@ -77,12 +77,28 @@ export default function CandidateLogin() {
         paperType: selectedPaper || null
       });
 
+      const candidatePayload = res.data.candidate || {};
+      const activePaper = candidatePayload.activePaperType;
+      const slotId = candidatePayload.slotAssignment?.id;
+
+      if (!activePaper) {
+        setError("No exam is currently available for you. Please contact the exam cell.");
+        return;
+      }
+
       // ✅ Store token & candidate info
       localStorage.setItem("candidateToken", res.data.token);
-      localStorage.setItem("candidate", JSON.stringify(res.data.candidate));
+      localStorage.setItem("candidate", JSON.stringify(candidatePayload));
 
-      // Redirect to candidate dashboard
-      navigate("/candidate/dashboard");
+      const params = new URLSearchParams({
+        candidateId: String(candidatePayload.id),
+        paperType: activePaper
+      });
+      if (slotId) {
+        params.set("slotId", String(slotId));
+      }
+
+      navigate(`/candidate/instructions?${params.toString()}`);
     } catch (err) {
       setError(
         err.response?.data?.error ||

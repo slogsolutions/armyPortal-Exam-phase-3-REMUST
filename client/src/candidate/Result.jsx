@@ -40,7 +40,29 @@ export default function Result() {
     return <div className="result-error">No results found</div>;
   }
 
-  const { candidate, theoryResults, practicalResults, trade } = data;
+  const {
+    candidate = {},
+    writtenResults = [],
+    practicalResults = [],
+    trade = {},
+    summary = {}
+  } = data;
+
+  const formatValue = (value) => {
+    if (value === null || value === undefined || value === "") {
+      return "NA";
+    }
+    return value;
+  };
+
+  const extraFields = [
+    { key: "bpet", label: "BPET" },
+    { key: "ppt", label: "PPT" },
+    { key: "cpt", label: "CPT" },
+    { key: "grade", label: "Computed Grade" },
+    { key: "gradeOverride", label: "Grade Override" },
+    { key: "overallResult", label: "Overall Result" }
+  ];
 
   return (
     <div className="result-page">
@@ -110,9 +132,14 @@ export default function Result() {
                   </tr>
                 </thead>
                 <tbody>
-                  {theoryResults.map((result, index) => (
+                  {writtenResults.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="empty">No written results available</td>
+                    </tr>
+                  )}
+                  {writtenResults.map((result, index) => (
                     <tr key={index}>
-                      <td className="paper-type">{result.paper}</td>
+                      <td className="paper-type">{result.type || result.paper}</td>
                       <td className="score">
                         {result.status === "NA" ? (
                           <span className="na">N/A</span>
@@ -157,44 +184,51 @@ export default function Result() {
           </section>
 
           {/* Practical Results */}
-          {practicalResults && practicalResults.length > 0 && (
-            <section className="results-section">
-              <h4>Practical Results</h4>
-              <div className="results-table">
-                <table>
+          <section className="results-section practical-horizontal">
+            <h4>Practical Results</h4>
+            {practicalResults.length === 0 ? (
+              <div className="empty practical-empty">
+                No practical exams configured for your trade.
+              </div>
+            ) : (
+              <div className="results-table horizontal">
+                <table className="practical-horizontal-table">
                   <thead>
                     <tr>
-                      <th>Exam Type</th>
-                      <th>Marks</th>
-                      <th>Status</th>
+                      {practicalResults.map((result) => (
+                        <th key={result.type}>{result.type}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {practicalResults.map((result, index) => (
-                      <tr key={index}>
-                        <td className="paper-type">{result.type}</td>
-                        <td className="score">
-                          {result.marks !== null && result.marks !== undefined ? (
-                            result.marks.toFixed(2)
-                          ) : (
-                            <span className="na">N/A</span>
-                          )}
-                        </td>
-                        <td className="status">
-                          {result.marks !== null && result.marks !== undefined ? (
-                            <span className="badge pass">Entered</span>
-                          ) : (
-                            <span className="badge na">Pending</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    <tr>
+                      {practicalResults.map((result) => {
+                        const rawMark = result.marks;
+                        const numericMark = rawMark === null || rawMark === undefined
+                          ? null
+                          : Number(rawMark);
+                        const hasMarks = numericMark !== null && !Number.isNaN(numericMark);
+
+                        return (
+                          <td key={result.type}>
+                            <div className="practical-cell">
+                              <span className="practical-marks">
+                                {hasMarks ? numericMark.toFixed(2) : "NA"}
+                              </span>
+                              <span className={`badge ${hasMarks ? "pass" : "pending"}`}>
+                                {hasMarks ? "Recorded" : "Pending"}
+                              </span>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
                   </tbody>
                 </table>
               </div>
-              <p className="practical-note">Note: Practical marks are entered by Exam Officers.</p>
-            </section>
-          )}
+            )}
+            <p className="practical-note">Note: Practical marks are entered by Exam Officers.</p>
+          </section>
 
           {/* Summary */}
           <section className="summary-section">
@@ -207,6 +241,30 @@ export default function Result() {
             <div className="summary-card">
               <h4>Minimum Passing Percentage</h4>
               <p className="min-percent">{trade.minPercent}%</p>
+            </div>
+          </section>
+
+          {/* Additional Metrics */}
+          <section className="aptitude-section">
+            <h4>Physical & Override Metrics</h4>
+            <div className="aptitude-grid">
+              {extraFields.map(({ key, label }) => {
+                const value = summary[key];
+                const display = formatValue(value);
+                const isResultBadge = key === "overallResult" && display !== "NA";
+                return (
+                  <div className="aptitude-card" key={key}>
+                    <span className="aptitude-label">{label}</span>
+                    {isResultBadge ? (
+                      <span className={`badge ${display === "PASS" ? "pass" : "fail"}`}>
+                        {display}
+                      </span>
+                    ) : (
+                      <span className="aptitude-value">{display}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         </div>

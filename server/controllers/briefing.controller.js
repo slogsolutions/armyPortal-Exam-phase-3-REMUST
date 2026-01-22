@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { attachQuestionCounts } = require("../utils/questionCounts");
+const { slotSummary, ensureSlotForPaper, getOrderedWrittenTypes, WRITTEN_SEQUENCE } = require("../utils/examFlow");
 
 /**
  * Get candidate briefing information
@@ -56,42 +57,71 @@ exports.getCandidateBriefing = async (req, res) => {
     });
 
     // Get exam attempts status
-    const examAttempts = await prisma.examAttempt.findMany({
-      where: { candidateId: Number(candidateId) },
+    const recentAttempts = await prisma.examAttempt.findMany({
+      where: {
+        candidateId: Number(candidateId)
+      },
       include: {
         examPaper: true,
-        examSlot: true
+        examSlot: {
+          include: {
+            command: true,
+            center: true
+          }
+        }
       },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: "desc"
+      },
+      take: 50
     });
 
-    const now = new Date();
+    const attemptSummary = recentAttempts.map((attempt) => ({
+      id: attempt.id,
+      paper: attempt.examPaper?.paperType,
+      score: attempt.score,
+      maxMarks: attempt.totalMarks,
+      percentage: attempt.percentage,
+      status: attempt.status,
+      slot: attempt.examSlot ? slotSummary(attempt.examSlot) : null,
+      submittedAt: attempt.submittedAt
+    }));
 
-    let candidateSlotsRaw = [];
-    if (selectedTypes.length > 0) {
-      candidateSlotsRaw = await prisma.examSlot.findMany({
-        where: {
-          tradeId: candidate.tradeId,
-          paperType: { in: selectedTypes },
-          endTime: { gte: now },
-          isActive: true,
-          ...(candidate.commandId ? { commandId: candidate.commandId } : {}),
-          ...(candidate.centerId ? { centerId: candidate.centerId } : {})
-        },
-        include: {
-          command: true,
-          center: true,
-          trade: true
-        },
-        orderBy: {
-          startTime: 'asc'
+    const completedWritten = new Set(
+      attemptSummary
+        .filter((attempt) => attempt.status === "COMPLETED" && WRITTEN_SEQUENCE.includes(attempt.paper))
+        .map((attempt) => attempt.paper)
+    );
+
+    const nextRequiredWritten = WRITTEN_SEQUENCE.find((type) => selectedTypes.includes(type) && !completedWritten.has(type));
+
+    const slots = selectedTypes.map((paperType) => {
+      const hasAttempted = attemptSummary.some((attempt) => attempt.paper === paperType);
+      return {
+        paperType,
+        slot: slotSummary(candidate.examSlots.find((slot) => slot.paperType === paperType)) || null,
+        status: hasAttempted ? "ATTEMPTED" : "PENDING",
+        nextAction: hasAttempted ? "VIEW_RESULT" : candidate.examSlots.find((slot) => slot.paperType === paperType) ? "START" : "NO_SLOT"
+      };
+    });
+
+    let activePaperType = null;
+    let slotAssignment = null;
+
+    for (const paperInfo of slots) {
+      let isEligible = paperInfo.status === "PENDING" && paperInfo.slot;
+      if (isEligible && WRITTEN_SEQUENCE.includes(paperInfo.paperType)) {
+        if (nextRequiredWritten && paperInfo.paperType !== nextRequiredWritten) {
+          isEligible = false;
         }
-      });
-    }
+      }
 
-    const enrichedSlots = await attachQuestionCounts(candidateSlotsRaw, prisma);
+      if (isEligible) {
+        activePaperType = paperInfo.paperType;
+        slotAssignment = paperInfo.slot;
+        break;
+      }
+    }
 
     // Build briefing data
     const briefing = {
@@ -124,27 +154,27 @@ exports.getCandidateBriefing = async (req, res) => {
         questionCount: paper._count.questions,
         isActive: paper.isActive
       })),
-      examSlots: enrichedSlots.map(slot => ({
-        id: slot.id,
+      examSlots: slots.map(slot => ({
+        id: slot.slot?.id,
         paperType: slot.paperType,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        currentCount: slot.currentCount,
-        canStart: now >= new Date(slot.startTime) && now <= new Date(slot.endTime),
-        questionCount: slot.questionCount || 0,
-        command: slot.command?.name || candidate.command?.name || null,
-        center: slot.center?.name || candidate.center?.name || null
+        startTime: slot.slot?.startTime,
+        endTime: slot.slot?.endTime,
+        currentCount: slot.slot?.currentCount,
+        canStart: slot.slot && new Date(slot.slot.startTime) <= new Date() && new Date(slot.slot.endTime) >= new Date(),
+        questionCount: slot.slot?.questionCount || 0,
+        command: slot.slot?.command?.name || candidate.command?.name || null,
+        center: slot.slot?.center?.name || candidate.center?.name || null
       })),
-      examStatus: examAttempts.map(attempt => ({
-        paperType: attempt.examPaper.paperType,
+      examStatus: attemptSummary.map(attempt => ({
+        paperType: attempt.paper,
         status: attempt.status,
         score: attempt.score,
         percentage: attempt.percentage,
         submittedAt: attempt.submittedAt,
-        slotInfo: attempt.examSlot ? {
-          startTime: attempt.examSlot.startTime,
-          endTime: attempt.examSlot.endTime,
-          location: attempt.examSlot.location
+        slotInfo: attempt.slot ? {
+          startTime: attempt.slot.startTime,
+          endTime: attempt.slot.endTime,
+          location: attempt.slot.location
         } : null
       })),
       instructions: {

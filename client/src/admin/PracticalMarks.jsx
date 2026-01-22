@@ -1,6 +1,25 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 import "./PracticalMarks.css";
+
+const INITIAL_FORM = {
+  pr1: "",
+  pr2: "",
+  pr3: "",
+  pr4: "",
+  pr5: "",
+  oral: "",
+  bpet: "",
+  ppt: "",
+  cpt: "",
+  gradeOverride: "",
+  overallResult: ""
+};
+
+const GRADE_OPTIONS = ["", "A", "B", "C", "D", "E"];
+const RESULT_OPTIONS = ["", "PASS", "FAIL", "ABSENT", "WITHHELD"];
+const PHYSICAL_OPTIONS = ["", "YES", "NO", "NA", "PASS", "FAIL"];
 
 export default function PracticalMarks() {
   const [candidates, setCandidates] = useState([]);
@@ -11,17 +30,36 @@ export default function PracticalMarks() {
   const [activeTab, setActiveTab] = useState('individual');
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkMarks, setBulkMarks] = useState([]);
-  const [form, setForm] = useState({
-    pr1: "",
-    pr2: "",
-    pr3: "",
-    pr4: "",
-    pr5: "",
-    oral: ""
-  });
+  const [form, setForm] = useState(INITIAL_FORM);
+  const navigate = useNavigate();
+
+  const requireAdminSession = () => {
+    const token = localStorage.getItem("adminToken");
+    if (!token) {
+      navigate("/admin/login", { replace: true });
+      return false;
+    }
+    return true;
+  };
+
+  const getAdminId = () => {
+    const adminFromStorage = localStorage.getItem("admin");
+    if (adminFromStorage) {
+      try {
+        const parsed = JSON.parse(adminFromStorage);
+        if (parsed?.id) return parsed.id;
+      } catch (error) {
+        console.warn("Failed to parse stored admin info", error);
+      }
+    }
+    const storedId = localStorage.getItem("adminId");
+    return storedId && storedId !== "undefined" ? storedId : null;
+  };
 
   useEffect(() => {
+    if (!requireAdminSession()) return;
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchData = async () => {
@@ -38,6 +76,11 @@ export default function PracticalMarks() {
       setLoading(false);
     } catch (error) {
       console.error("Failed to fetch data:", error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        alert("Admin session expired. Please login again.");
+        navigate("/admin/login", { replace: true });
+        return;
+      }
       setLoading(false);
     }
   };
@@ -45,12 +88,18 @@ export default function PracticalMarks() {
   const handleCandidateSelect = (candidate) => {
     setSelectedCandidate(candidate);
     setForm({
-      pr1: candidate.practicalMarks?.pr1 || "",
-      pr2: candidate.practicalMarks?.pr2 || "",
-      pr3: candidate.practicalMarks?.pr3 || "",
-      pr4: candidate.practicalMarks?.pr4 || "",
-      pr5: candidate.practicalMarks?.pr5 || "",
-      oral: candidate.practicalMarks?.oral || ""
+      ...INITIAL_FORM,
+      pr1: candidate.practicalMarks?.pr1 ?? "",
+      pr2: candidate.practicalMarks?.pr2 ?? "",
+      pr3: candidate.practicalMarks?.pr3 ?? "",
+      pr4: candidate.practicalMarks?.pr4 ?? "",
+      pr5: candidate.practicalMarks?.pr5 ?? "",
+      oral: candidate.practicalMarks?.oral ?? "",
+      bpet: candidate.practicalMarks?.bpet ?? "",
+      ppt: candidate.practicalMarks?.ppt ?? "",
+      cpt: candidate.practicalMarks?.cpt ?? "",
+      gradeOverride: candidate.practicalMarks?.gradeOverride ?? "",
+      overallResult: candidate.practicalMarks?.overallResult ?? ""
     });
   };
 
@@ -63,68 +112,51 @@ export default function PracticalMarks() {
     }
 
     try {
-      const adminId = localStorage.getItem('adminId');
+      if (!requireAdminSession()) return;
+      const adminId = getAdminId();
       if (!adminId) {
         alert("Admin session not found. Please login again.");
+        navigate("/admin/login", { replace: true });
         return;
       }
 
       // Submit each practical mark
       const trade = selectedCandidate.trade;
       const promises = [];
+      const enqueueMark = (enabled, value, examType) => {
+        if (enabled && value !== "") {
+          promises.push(api.post("/practical/submit", {
+            candidateId: selectedCandidate.id,
+            examType,
+            marks: parseFloat(value),
+            enteredBy: adminId
+          }));
+        }
+      };
 
-      if (trade.pr1 && form.pr1 !== "") {
-        promises.push(api.post("/practical/submit", {
-          candidateId: selectedCandidate.id,
-          examType: "PR-I",
-          marks: parseFloat(form.pr1),
-          enteredBy: adminId
-        }));
-      }
+      enqueueMark(trade.pr1, form.pr1, "PR-I");
+      enqueueMark(trade.pr2, form.pr2, "PR-II");
+      enqueueMark(trade.pr3, form.pr3, "PR-III");
+      enqueueMark(trade.pr4, form.pr4, "PR-IV");
+      enqueueMark(trade.pr5, form.pr5, "PR-V");
+      enqueueMark(trade.oral, form.oral, "ORAL");
 
-      if (trade.pr2 && form.pr2 !== "") {
-        promises.push(api.post("/practical/submit", {
-          candidateId: selectedCandidate.id,
-          examType: "PR-II",
-          marks: parseFloat(form.pr2),
-          enteredBy: adminId
-        }));
-      }
+      const extrasPayload = {
+        candidateId: selectedCandidate.id,
+        enteredBy: adminId
+      };
+      let hasExtras = false;
 
-      if (trade.pr3 && form.pr3 !== "") {
-        promises.push(api.post("/practical/submit", {
-          candidateId: selectedCandidate.id,
-          examType: "PR-III",
-          marks: parseFloat(form.pr3),
-          enteredBy: adminId
-        }));
-      }
+      ["bpet", "ppt", "cpt", "gradeOverride", "overallResult"].forEach((field) => {
+        const value = form[field];
+        if (value !== undefined && value !== null && value !== "") {
+          extrasPayload[field] = typeof value === "string" ? value.toUpperCase() : value;
+          hasExtras = true;
+        }
+      });
 
-      if (trade.pr4 && form.pr4 !== "") {
-        promises.push(api.post("/practical/submit", {
-          candidateId: selectedCandidate.id,
-          examType: "PR-IV",
-          marks: parseFloat(form.pr4),
-          enteredBy: adminId
-        }));
-      }
-
-      if (trade.pr5 && form.pr5 !== "") {
-        promises.push(api.post("/practical/submit", {
-          candidateId: selectedCandidate.id,
-          examType: "PR-V",
-          marks: parseFloat(form.pr5),
-          enteredBy: adminId
-        }));
-      }
-
-      if (trade.oral && form.oral !== "") {
-        promises.push(api.post("/practical/submit", {
-          candidateId: selectedCandidate.id,
-          examType: "ORAL",
-          marks: parseFloat(form.oral),
-          enteredBy: adminId
-        }));
+      if (hasExtras) {
+        promises.push(api.post("/practical/submit", extrasPayload));
       }
 
       await Promise.all(promises);
@@ -142,14 +174,32 @@ export default function PracticalMarks() {
     }
 
     try {
-      const adminId = localStorage.getItem('adminId');
+      if (!requireAdminSession()) return;
+      const adminId = getAdminId();
       if (!adminId) {
         alert("Admin session not found. Please login again.");
         return;
       }
 
+      const sanitizedMarks = bulkMarks.map((entry) => {
+        const payload = { candidateId: entry.candidateId };
+        NUMERIC_FIELDS.forEach((field) => {
+          const value = entry[field];
+          if (value !== null && value !== "" && value !== undefined) {
+            payload[field] = Number(value);
+          }
+        });
+        ["bpet", "ppt", "cpt", "gradeOverride", "overallResult"].forEach((field) => {
+          const value = entry[field];
+          if (value !== undefined && value !== null && value !== "") {
+            payload[field] = typeof value === "string" ? value.toUpperCase() : value;
+          }
+        });
+        return payload;
+      });
+
       const response = await api.post("/practical/bulk-submit", {
-        marks: bulkMarks,
+        marks: sanitizedMarks,
         enteredBy: adminId
       });
 
@@ -180,15 +230,26 @@ export default function PracticalMarks() {
       pr3: candidate.trade.pr3 ? "" : null,
       pr4: candidate.trade.pr4 ? "" : null,
       pr5: candidate.trade.pr5 ? "" : null,
-      oral: candidate.trade.oral ? "" : null
+      oral: candidate.trade.oral ? "" : null,
+      bpet: "",
+      ppt: "",
+      cpt: "",
+      gradeOverride: "",
+      overallResult: ""
     };
 
     setBulkMarks([...bulkMarks, newMark]);
   };
 
+  const NUMERIC_FIELDS = ["pr1", "pr2", "pr3", "pr4", "pr5", "oral"];
+
   const updateBulkMark = (index, field, value) => {
     const updated = [...bulkMarks];
-    updated[index][field] = value === "" ? "" : parseFloat(value);
+    if (NUMERIC_FIELDS.includes(field)) {
+      updated[index][field] = value === "" ? "" : parseFloat(value);
+    } else {
+      updated[index][field] = value;
+    }
     setBulkMarks(updated);
   };
 
@@ -352,6 +413,67 @@ export default function PracticalMarks() {
                   )}
                 </div>
 
+                <div className="grading-section">
+                  <h3>Physical Tests & Overrides</h3>
+                  <div className="grading-grid">
+                    <div className="form-group">
+                      <label>BPET</label>
+                      <select
+                        value={form.bpet}
+                        onChange={(e) => setForm(prev => ({ ...prev, bpet: e.target.value }))}
+                      >
+                        {PHYSICAL_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt || "Select option"}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>PPT</label>
+                      <select
+                        value={form.ppt}
+                        onChange={(e) => setForm(prev => ({ ...prev, ppt: e.target.value }))}
+                      >
+                        {PHYSICAL_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt || "Select option"}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>CPT</label>
+                      <select
+                        value={form.cpt}
+                        onChange={(e) => setForm(prev => ({ ...prev, cpt: e.target.value }))}
+                      >
+                        {PHYSICAL_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt || "Select option"}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Grade Override</label>
+                      <select
+                        value={form.gradeOverride}
+                        onChange={(e) => setForm(prev => ({ ...prev, gradeOverride: e.target.value }))}
+                      >
+                        {GRADE_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt || "None"}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Overall Result</label>
+                      <select
+                        value={form.overallResult}
+                        onChange={(e) => setForm(prev => ({ ...prev, overallResult: e.target.value }))}
+                      >
+                        {RESULT_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt || "Select result"}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="form-actions">
                   <button type="submit" className="btn btn-primary">Save Marks</button>
                   <button 
@@ -421,6 +543,11 @@ export default function PracticalMarks() {
                     <th>PR-IV</th>
                     <th>PR-V</th>
                     <th>ORAL</th>
+                    <th>BPET</th>
+                    <th>PPT</th>
+                    <th>CPT</th>
+                    <th>Grade Override</th>
+                    <th>Overall Result</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -507,6 +634,56 @@ export default function PracticalMarks() {
                             placeholder="0-100"
                           />
                         )}
+                      </td>
+                      <td>
+                        <select
+                          value={mark.bpet}
+                          onChange={(e) => updateBulkMark(index, 'bpet', e.target.value)}
+                        >
+                          {PHYSICAL_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt || "Select"}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={mark.ppt}
+                          onChange={(e) => updateBulkMark(index, 'ppt', e.target.value)}
+                        >
+                          {PHYSICAL_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt || "Select"}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={mark.cpt}
+                          onChange={(e) => updateBulkMark(index, 'cpt', e.target.value)}
+                        >
+                          {PHYSICAL_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt || "Select"}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={mark.gradeOverride}
+                          onChange={(e) => updateBulkMark(index, 'gradeOverride', e.target.value)}
+                        >
+                          {GRADE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt || "Select"}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          value={mark.overallResult}
+                          onChange={(e) => updateBulkMark(index, 'overallResult', e.target.value)}
+                        >
+                          {RESULT_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt || "Select"}</option>
+                          ))}
+                        </select>
                       </td>
                       <td>
                         <button 

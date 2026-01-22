@@ -9,17 +9,28 @@ api.interceptors.request.use((config) => {
   const candidateToken = localStorage.getItem("candidateToken");
 
   const urlPath = config.url || "";
+  const currentPath = window?.location?.pathname || "";
+  const inAdminShell = currentPath.startsWith("/admin");
   let token = null;
 
-  if (urlPath.startsWith("/admin")) {
-    token = adminToken || candidateToken;
+  const ensureAdmin =
+    urlPath.startsWith("/admin") ||
+    urlPath.startsWith("/exam-slot") ||
+    (inAdminShell &&
+      (urlPath.startsWith("/candidate") ||
+        urlPath.startsWith("/practical") ||
+        urlPath.startsWith("/result") ||
+        urlPath.startsWith("/exam")));
+
+  if (ensureAdmin) {
+    token = adminToken;
   } else if (
     urlPath.startsWith("/candidate") ||
     urlPath.startsWith("/briefing") ||
     urlPath.startsWith("/exam") ||
     urlPath.startsWith("/result")
   ) {
-    token = candidateToken || adminToken;
+    token = candidateToken;
   } else {
     token = adminToken || candidateToken;
   }

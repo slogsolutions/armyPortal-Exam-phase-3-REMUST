@@ -1,11 +1,13 @@
 const prisma = require("../config/prisma");
 const { attachQuestionCounts } = require("../utils/questionCounts");
+const { recalcSlotCurrentCount } = require("../utils/slotUtils");
 
 const WRITTEN_PAPER_TYPES = [
   ["wp1", "WP-I"],
   ["wp2", "WP-II"],
   ["wp3", "WP-III"],
 ];
+const WRITTEN_SEQUENCE = ["WP-I", "WP-II", "WP-III"];
 
 const parseSelectedExamTypesString = (value) => {
   if (!value) return [];
@@ -54,19 +56,80 @@ const parseDateInput = (value) => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
-const recalcSlotCurrentCount = async (tx, slotId) => {
-  const count = await tx.candidate.count({
-    where: {
-      examSlots: {
-        some: { id: slotId }
+const getOrderedWrittenTypes = (selectedTypes = []) =>
+  WRITTEN_SEQUENCE.filter((type) => selectedTypes.includes(type));
+
+const slotSummary = (slot) =>
+  slot
+    ? {
+        id: slot.id,
+        paperType: slot.paperType,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        command: slot.command?.name || null,
+        center: slot.center?.name || null
       }
-    }
+    : null;
+
+const ensureSlotForPaper = async (candidate, paperType) => {
+  if (!paperType) return null;
+  const now = new Date();
+
+  const existingSlot = await prisma.examSlot.findFirst({
+    where: {
+      tradeId: candidate.tradeId,
+      paperType,
+      isActive: true,
+      endTime: { gte: now },
+      candidates: {
+        some: { id: candidate.id }
+      }
+    },
+    orderBy: { startTime: "asc" },
+    include: { command: true, center: true }
   });
 
-  await tx.examSlot.update({
-    where: { id: slotId },
-    data: { currentCount: count }
+  if (existingSlot) {
+    return existingSlot;
+  }
+
+  const slotFilters = {
+    tradeId: candidate.tradeId,
+    paperType,
+    commandId: candidate.commandId,
+    isActive: true,
+    startTime: { gte: now }
+  };
+
+  if (candidate.centerId) {
+    slotFilters.centerId = candidate.centerId;
+  }
+
+  const nextSlot = await prisma.examSlot.findFirst({
+    where: slotFilters,
+    orderBy: { startTime: "asc" },
+    include: { command: true, center: true }
   });
+
+  if (!nextSlot) {
+    return null;
+  }
+
+  try {
+    await prisma.examSlot.update({
+      where: { id: nextSlot.id },
+      data: {
+        currentCount: { increment: 1 },
+        candidates: {
+          connect: { id: candidate.id }
+        }
+      }
+    });
+  } catch (error) {
+    // Ignore duplicate connection errors and continue
+  }
+
+  return nextSlot;
 };
 
 const loadCandidateDetail = async (candidateId) => {
@@ -296,29 +359,47 @@ exports.login = async (req, res) => {
     }
 
     const selectedTypes = JSON.parse(candidate.selectedExamTypes || "[]");
-    let activePaperType = paperType || null;
+    const orderedWrittenTypes = getOrderedWrittenTypes(selectedTypes);
 
-    if (selectedTypes.length === 0) {
-      activePaperType = null;
-    } else if (selectedTypes.length === 1) {
-      activePaperType = selectedTypes[0];
+    const attempts = await prisma.examAttempt.findMany({
+      where: { candidateId: candidate.id },
+      include: { examPaper: true }
+    });
+
+    const completedPapers = new Set(
+      attempts
+        .filter((attempt) => attempt.status === "COMPLETED" && attempt.examPaper)
+        .map((attempt) => attempt.examPaper.paperType)
+    );
+
+    const inProgressAttempt = attempts.find(
+      (attempt) => attempt.status === "IN_PROGRESS" && attempt.examPaper
+    );
+
+    let enforcedPaperType = null;
+
+    if (inProgressAttempt) {
+      enforcedPaperType = inProgressAttempt.examPaper.paperType;
     } else {
-      if (!activePaperType) {
-        return res.status(400).json({
-          success: false,
-          error: "Please select the written paper you wish to attempt",
-          requiredPapers: selectedTypes
-        });
-      }
-
-      if (!selectedTypes.includes(activePaperType)) {
-        return res.status(400).json({
-          success: false,
-          error: "Selected paper type is not registered for this candidate",
-          requiredPapers: selectedTypes
-        });
-      }
+      enforcedPaperType = orderedWrittenTypes.find((type) => !completedPapers.has(type)) || null;
     }
+
+    if (!enforcedPaperType) {
+      return res.status(400).json({
+        success: false,
+        error: "All registered written papers are already completed. Please contact the exam cell for reactivation."
+      });
+    }
+
+    if (paperType && paperType !== enforcedPaperType) {
+      return res.status(400).json({
+        success: false,
+        error: `${paperType} is locked. Next available paper: ${enforcedPaperType}`,
+        requiredPaper: enforcedPaperType
+      });
+    }
+
+    const assignedSlot = await ensureSlotForPaper(candidate, enforcedPaperType);
 
     // Create a simple token for candidate
     const jwt = require("jsonwebtoken");
@@ -345,7 +426,11 @@ exports.login = async (req, res) => {
         command: candidate.command,
         center: candidate.center,
         selectedExamTypes: selectedTypes,
-        activePaperType
+        paperSequence: orderedWrittenTypes,
+        activePaperType: enforcedPaperType,
+        completedPapers: Array.from(completedPapers),
+        inProgressAttemptId: inProgressAttempt?.id || null,
+        slotAssignment: slotSummary(assignedSlot)
       }
     });
   } catch (err) {

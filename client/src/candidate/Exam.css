@@ -65,6 +65,64 @@
   color: #d6c28e;
 }
 
+.exam-prep-screen {
+  min-height: 100vh;
+  background: #0b140e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #d6c28e;
+}
+
+.exam-prep-card {
+  max-width: 600px;
+  width: 100%;
+  background: #13251c;
+  border: 1px solid #355f3e;
+  border-radius: 12px;
+  padding: 30px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.exam-prep-card h2 {
+  margin-top: 0;
+  color: #ffd700;
+  margin-bottom: 12px;
+}
+
+.exam-prep-card p {
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.prep-start-btn {
+  padding: 14px 28px;
+  background: #d4af37;
+  color: #000;
+  border: none;
+  border-radius: 999px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.prep-start-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.prep-start-btn:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(212, 175, 55, 0.3);
+}
+
+.prep-error {
+  color: #ff6b6b;
+  margin-bottom: 12px;
+}
+
 .exam-body {
   display: flex;
   flex: 1;

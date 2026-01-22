@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import "./Instructions.css";
 
@@ -6,9 +6,54 @@ export default function Instructions() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [agreed, setAgreed] = useState(false);
+  const [candidate, setCandidate] = useState(null);
+  const [slotInfo, setSlotInfo] = useState(null);
   const candidateId = searchParams.get("candidateId");
   const paperType = searchParams.get("paperType");
   const slotId = searchParams.get("slotId");
+
+  useEffect(() => {
+    const storedCandidate = localStorage.getItem("candidate");
+    const token = localStorage.getItem("candidateToken");
+
+    if (!storedCandidate || !token) {
+      navigate("/candidate/login", { replace: true });
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(storedCandidate);
+      setCandidate(parsed);
+      if (!paperType || paperType !== parsed.activePaperType) {
+        const params = new URLSearchParams({
+          candidateId: String(parsed.id),
+          paperType: parsed.activePaperType || ""
+        });
+        if (parsed.slotAssignment?.id) {
+          params.set("slotId", String(parsed.slotAssignment.id));
+        }
+        navigate(`/candidate/instructions?${params.toString()}`, { replace: true });
+        return;
+      }
+
+      if (parsed.slotAssignment && (!slotId || slotId === String(parsed.slotAssignment.id))) {
+        setSlotInfo(parsed.slotAssignment);
+      } else {
+        setSlotInfo(null);
+      }
+    } catch (error) {
+      console.warn("Failed to parse candidate info", error);
+      navigate("/candidate/login", { replace: true });
+    }
+  }, [navigate, paperType, slotId]);
+
+  const slotTimeRange = useMemo(() => {
+    if (!slotInfo) return null;
+    const start = slotInfo.startTime ? new Date(slotInfo.startTime) : null;
+    const end = slotInfo.endTime ? new Date(slotInfo.endTime) : null;
+    if (!start || !end) return null;
+    return `${start.toLocaleString()} - ${end.toLocaleString()}`;
+  }, [slotInfo]);
 
   const start = async () => {
     if (!agreed) {
@@ -49,6 +94,35 @@ export default function Instructions() {
           <h1>ARMY EXAM PORTAL</h1>
           <h2>2 Signal Training Centre Online Exam Portal</h2>
           <h3>IMPORTANT INSTRUCTIONS - PLEASE READ CAREFULLY</h3>
+        </div>
+
+        <div className="slot-summary">
+          <div>
+            <p className="slot-label">Candidate</p>
+            <h4>{candidate?.name || "-"}</h4>
+            <p className="slot-subtext">Army No: {candidate?.armyNo || "-"}</p>
+          </div>
+          <div>
+            <p className="slot-label">Paper</p>
+            <h4>{paperType}</h4>
+            <p className="slot-subtext">Sequence enforced</p>
+          </div>
+          <div>
+            <p className="slot-label">Assigned Slot</p>
+            {slotInfo ? (
+              <>
+                <h4>{slotTimeRange || "Scheduled"}</h4>
+                <p className="slot-subtext">
+                  {slotInfo.center || slotInfo.command || "Exam Centre"}
+                </p>
+              </>
+            ) : (
+              <>
+                <h4>Pending</h4>
+                <p className="slot-subtext warning">Contact the exam cell if no slot appears.</p>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="instructions-content">

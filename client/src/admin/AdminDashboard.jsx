@@ -13,6 +13,7 @@ import ExamSlots from "./ExamSlots";
 import PracticalMarks from "./PracticalMarks";
 import Results from "./Results";
 import CandidateManager from "./CandidateManager";
+import DeleteData from "./DeleteData";
 import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
@@ -40,12 +41,12 @@ export default function AdminDashboard() {
   }, [location.pathname, navigate]);
 
   const menuItems = [
-    {
-      id: "masters",
-      label: "Master Data",
-      icon: "⚪",
-      path: "/admin/masters"
-    },
+    // {
+    //   id: "masters",
+    //   label: "Master Data",
+    //   icon: "⚪",
+    //   path: "/admin/masters"
+    // },
     // {
     //   id: "trade-config",
     //   label: "Trade Configuration",
@@ -81,6 +82,12 @@ export default function AdminDashboard() {
       label: "Results",
       icon: "⚪",
       path: "/admin/results"
+    },
+    {
+      id: "delete-data",
+      label: "Delete Data",
+      icon: "⚪",
+      path: "/admin/delete-data"
     }
   ];
 
@@ -102,6 +109,7 @@ export default function AdminDashboard() {
   const logout = () => {
     localStorage.removeItem("adminToken");
     localStorage.removeItem("admin");
+    localStorage.removeItem("adminId");
     navigate("/admin/login");
   };
 
@@ -181,6 +189,7 @@ export default function AdminDashboard() {
             <Route path="practical-marks" element={<PracticalMarks />} />
             <Route path="candidates" element={<CandidateManager />} />
             <Route path="results" element={<Results />} />
+            <Route path="delete-data" element={<DeleteData />} />
           </Routes>
         </div>
       </div>

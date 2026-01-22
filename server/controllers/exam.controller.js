@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const XLSX = require("xlsx");
+const { WRITTEN_SEQUENCE } = require("../utils/examFlow");
 const fs = require("fs");
 const crypto = require("crypto");
 
@@ -131,6 +132,38 @@ exports.startExam = async (req, res) => {
 
     if (selectedTypes.length && !selectedTypes.includes(resolvedPaperType)) {
       return res.status(403).json({ error: "Candidate is not registered for this paper type" });
+    }
+
+    // Ensure written sequence order (WP-I before WP-II, etc.)
+    if (WRITTEN_SEQUENCE.includes(resolvedPaperType)) {
+      const completedWritten = await prisma.examAttempt.findMany({
+        where: {
+          candidateId: Number(candidateId),
+          status: "COMPLETED",
+          examPaper: {
+            paperType: { in: WRITTEN_SEQUENCE }
+          }
+        },
+        include: { examPaper: true }
+      });
+
+      const completedTypes = completedWritten.map((attempt) => attempt.examPaper.paperType);
+      const nextRequired = WRITTEN_SEQUENCE.find((type) => !completedTypes.includes(type));
+
+      if (nextRequired && resolvedPaperType !== nextRequired) {
+        return res.status(403).json({
+          error: `You must complete ${nextRequired} before attempting ${resolvedPaperType}`,
+          nextRequired
+        });
+      }
+
+      const alreadyCompleted = completedTypes.includes(resolvedPaperType);
+      if (alreadyCompleted) {
+        return res.status(403).json({
+          error: `${resolvedPaperType} already completed`,
+          completed: true
+        });
+      }
     }
 
     // Resolve paper if not provided via ID
@@ -674,36 +707,51 @@ exports.bulkUploadPapers = async (req, res) => {
           continue;
         }
 
+        // Check for duplicates by normalized question text within the same paper
+        const normalizedQuestion = questionText.trim().toLowerCase();
+        const existingQuestion = await prisma.question.findFirst({
+          where: {
+            examPaperId: paper.id,
+            questionText: {
+              equals: questionText,
+              mode: "insensitive"
+            }
+          }
+        });
+
+        if (existingQuestion) {
+          summaryEntry.errors += 1;
+          errors.push({ row, error: "Duplicate question detected. Skipped." });
+          continue;
+        }
+
         // Get question count for ordering
         const questionCount = await prisma.question.count({
           where: { examPaperId: paper.id }
         });
 
-        // Create question (only for written exams)
-        if (paper) {
-          const question = await prisma.question.create({
-            data: {
-              examPaperId: paper.id,
-              questionText,
-              optionA: optionA || null,
-              optionB: optionB || null,
-              optionC: optionC || null,
-              optionD: optionD || null,
-              correctAnswer,
-              marks,
-              questionOrder: questionCount + 1
-            }
-          });
+        const question = await prisma.question.create({
+          data: {
+            examPaperId: paper.id,
+            questionText,
+            optionA: optionA || null,
+            optionB: optionB || null,
+            optionC: optionC || null,
+            optionD: optionD || null,
+            correctAnswer,
+            marks,
+            questionOrder: questionCount + 1
+          }
+        });
 
-          console.log("✅ Created question", {
-            tradeId: trade.id,
-            paperType,
-            questionId: question.id,
-            order: question.questionOrder
-          });
-          results.push({ trade: tradeName, paperType, questionId: question.id });
-          summaryEntry.created += 1;
-        }
+        console.log("✅ Created question", {
+          tradeId: trade.id,
+          paperType,
+          questionId: question.id,
+          order: question.questionOrder
+        });
+        results.push({ trade: tradeName, paperType, questionId: question.id });
+        summaryEntry.created += 1;
       } catch (err) {
         console.error("❌ Row processing failed", { row, error: err.message });
         errors.push({ row, error: err.message });

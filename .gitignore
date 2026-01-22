@@ -9,3 +9,5 @@ server/node_modules/
 # General
 node_modules/
 .env
+
+also write now , similar questions are getting uploaded into database when i m uploading the same file or file containing same questions , i want if the selected file uplaoded only the different questions gets uploaded to database else no same questions gets uplaoded to database  

@@ -17,6 +17,9 @@ export default function Exam() {
   const [examFinished, setExamFinished] = useState(false);
   const [showFocusModal, setShowFocusModal] = useState(false);
   const [fullscreenActive, setFullscreenActive] = useState(false);
+  const [startPayload, setStartPayload] = useState(null);
+  const [preparingExam, setPreparingExam] = useState(false);
+  const [startError, setStartError] = useState(null);
   const intervalRef = useRef(null);
   const startTimeRef = useRef(null);
 
@@ -40,8 +43,7 @@ export default function Exam() {
         setPaper(paperRes.data);
         setTimeRemaining(3 * 60 * 60); // 3 hours default
 
-        // Start exam attempt
-        const startPayload = {
+        const payload = {
           candidateId: Number(candidateId),
           paperType,
           examPaperId: paperRes.data.id
@@ -49,24 +51,11 @@ export default function Exam() {
 
         const slotId = searchParams.get("slotId");
         if (slotId) {
-          startPayload.examSlotId = Number(slotId);
+          payload.examSlotId = Number(slotId);
         }
 
-        const attemptRes = await api.post("/exam/start", startPayload);
-
-        setAttemptId(attemptRes.data.id);
-        startTimeRef.current = new Date();
-        setExamStarted(true);
-
-        if (!document.fullscreenElement) {
-          try {
-            await document.documentElement.requestFullscreen?.();
-          } catch (err) {
-            console.warn("Unable to enter fullscreen on start", err);
-          }
-        }
-
-        setFullscreenActive(Boolean(document.fullscreenElement));
+        setStartPayload(payload);
+        setStartError(null);
       } catch (error) {
         console.error("Error loading paper:", error);
         const message = error.response?.data?.error || "Failed to load exam paper";
@@ -310,11 +299,58 @@ export default function Exam() {
     await submitExam({ skipConfirm: true });
   };
 
-  if (!paper || !examStarted) {
+  const handleBeginExam = async () => {
+    if (!startPayload || preparingExam) return;
+    setPreparingExam(true);
+    setStartError(null);
+    try {
+      const attemptRes = await api.post("/exam/start", startPayload);
+      setAttemptId(attemptRes.data.id);
+      startTimeRef.current = new Date();
+
+      if (!document.fullscreenElement) {
+        try {
+          await document.documentElement.requestFullscreen?.();
+        } catch (err) {
+          console.warn("Unable to enter fullscreen on start", err);
+        }
+      }
+
+      setExamStarted(true);
+      setFullscreenActive(Boolean(document.fullscreenElement));
+    } catch (error) {
+      console.error("Start exam error:", error);
+      const message = error.response?.data?.error || "Unable to start exam";
+      setStartError(message);
+    } finally {
+      setPreparingExam(false);
+    }
+  };
+
+  if (!paper) {
     return (
       <div className="exam-loading">
         <div className="loading-spinner"></div>
         <p>Loading exam paper...</p>
+      </div>
+    );
+  }
+
+  if (paper && !examStarted) {
+    return (
+      <div className="exam-prep-screen">
+        <div className="exam-prep-card">
+          <h2>{paper.paperType} - {paper.trade?.name}</h2>
+          <p>Click below to enter fullscreen and begin your assessment. Please ensure you are ready before proceeding.</p>
+          {startError && <p className="prep-error">{startError}</p>}
+          <button
+            className="prep-start-btn"
+            onClick={handleBeginExam}
+            disabled={preparingExam || !startPayload}
+          >
+            {preparingExam ? "Preparing..." : "Enter Fullscreen & Begin Exam"}
+          </button>
+        </div>
       </div>
     );
   }

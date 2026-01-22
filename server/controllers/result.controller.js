@@ -128,8 +128,10 @@ exports.getResult = async (req, res) => {
 
         return {
           type,
+          category: "WRITTEN",
           score,
           maxMarks,
+          totalMarks: maxMarks,
           percentage: percentage !== null ? parseFloat(percentage.toFixed(2)) : null,
           status,
           submittedAt: attempt?.submittedAt || null
@@ -143,14 +145,19 @@ exports.getResult = async (req, res) => {
     const practicalResults = practicalTypes
       .filter(({ flag }) => trade[flag])
       .map(({ type }) => {
-        const value = practicalMarks ? practicalMarks[type.replace("-", "").toLowerCase()] : null;
+        const fieldKey = PRACTICAL_FIELD_MAP[type];
+        const value = practicalMarks && fieldKey ? practicalMarks[fieldKey] : null;
         const parsed = value !== null && value !== undefined ? Number(value) : null;
         const maxMarks = PAPER_MAX_MARKS[type];
         const percentage = parsed !== null && maxMarks ? (parsed / maxMarks) * 100 : null;
+        const hasMarks = parsed !== null && !Number.isNaN(parsed);
         return {
           type,
+          category: "PRACTICAL",
           marks: parsed,
           maxMarks,
+          totalMarks: maxMarks,
+          status: hasMarks ? "RECORDED" : "PENDING",
           percentage: percentage !== null ? parseFloat(percentage.toFixed(2)) : null
         };
       });
@@ -198,13 +205,13 @@ exports.getResult = async (req, res) => {
         id: candidate.id,
         armyNo: candidate.armyNo,
         name: candidate.name,
-        rank: candidate.rank.name,
-        trade: candidate.trade.name,
+        rank: candidate.rank?.name || "-",
+        trade: candidate.trade?.name || "-",
         unit: candidate.unit,
         medCat: candidate.medCat,
         corps: candidate.corps,
-        command: candidate.command.name,
-        center: candidate.center.name
+        command: candidate.command?.name || "-",
+        center: candidate.center?.name || "-"
       },
       trade: {
         id: trade.id,
@@ -226,13 +233,27 @@ exports.getResult = async (req, res) => {
         bpet: practicalMarks?.bpet || "NA",
         ppt: practicalMarks?.ppt || "NA",
         cpt: practicalMarks?.cpt || "NA",
-        minComponentPercent: gradeInfo.minComponent ?? null
+        minComponentPercent: gradeInfo.minComponent ?? null,
+        gradeOverride: practicalMarks?.gradeOverride || null
       },
       gradingTable: GRADE_TABLE,
       aptitude: {
         bpet: practicalMarks?.bpet || "NA",
         ppt: practicalMarks?.ppt || "NA",
         cpt: practicalMarks?.cpt || "NA"
+      },
+      practicalExtras: {
+        pr1: practicalMarks?.pr1 ?? null,
+        pr2: practicalMarks?.pr2 ?? null,
+        pr3: practicalMarks?.pr3 ?? null,
+        pr4: practicalMarks?.pr4 ?? null,
+        pr5: practicalMarks?.pr5 ?? null,
+        oral: practicalMarks?.oral ?? null,
+        bpet: practicalMarks?.bpet ?? null,
+        ppt: practicalMarks?.ppt ?? null,
+        cpt: practicalMarks?.cpt ?? null,
+        gradeOverride: practicalMarks?.gradeOverride ?? null,
+        overallResult: practicalMarks?.overallResult ?? null
       }
     });
   } catch (error) {

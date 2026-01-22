@@ -34,4 +34,9 @@ router.get("/centers", ctrl.getCenters);
 /* ===== BULK OPERATIONS (ADMIN ONLY) ===== */
 router.post("/trades/bulk", isAuth(["ADMIN"]), ctrl.bulkConfigureTrades);
 
+/* ===== DATA EXPORT & PURGE ===== */
+router.get("/data/export", isAuth(["ADMIN"]), ctrl.exportExamData);
+router.delete("/data", isAuth(["ADMIN"]), ctrl.deleteOperationalData);
+router.delete("/data/exam-content", isAuth(["ADMIN"]), ctrl.deleteExamContent);
+
 module.exports = router;
