@@ -21,6 +21,15 @@ const PAPER_MAX_MARKS = {
   ORAL: 50
 };
 
+const PRACTICAL_FIELD_MAP = {
+  "PR-I": "pr1",
+  "PR-II": "pr2",
+  "PR-III": "pr3",
+  "PR-IV": "pr4",
+  "PR-V": "pr5",
+  ORAL: "oral"
+};
+
 const getSelectedExamTypes = (candidate) => {
   if (!candidate.selectedExamTypes) return [];
   try {
@@ -80,6 +89,10 @@ exports.getResult = async (req, res) => {
       return res.status(404).json({ error: "Candidate not found" });
     }
 
+    if (!candidate.trade) {
+      return res.status(400).json({ error: "Candidate trade information is missing" });
+    }
+
     const attempts = await prisma.examAttempt.findMany({
       where: { candidateId },
       include: {
@@ -89,7 +102,9 @@ exports.getResult = async (req, res) => {
 
     const attemptMap = new Map();
     attempts.forEach((attempt) => {
-      attemptMap.set(attempt.examPaper.paperType, attempt);
+      const paperType = attempt.examPaper?.paperType;
+      if (!paperType) return;
+      attemptMap.set(paperType, attempt);
     });
 
     const selectedExamTypes = getSelectedExamTypes(candidate);
@@ -114,36 +129,118 @@ exports.getResult = async (req, res) => {
       .filter(({ flag }) => trade[flag])
       .map(({ type }) => {
         const attempt = attemptMap.get(type);
-        const maxMarks = attempt?.totalMarks ?? PAPER_MAX_MARKS[type] ?? 0;
-        const participated = attempt && selectedExamTypes.includes(type);
-        const score = participated ? attempt.score : null;
-        const percentage = participated && maxMarks > 0 ? (attempt.score / maxMarks) * 100 : null;
-        const status = participated
-          ? attempt.status === "COMPLETED" && percentage !== null
-            ? percentage >= (trade.minPercent || 40)
-              ? "PASS"
-              : "FAIL"
-            : attempt.status
-          : "NA";
+        const hasAttempt = Boolean(attempt);
+        const effectiveMax = hasAttempt
+          ? attempt.totalMarks ?? PAPER_MAX_MARKS[type] ?? 0
+          : PAPER_MAX_MARKS[type] ?? 0;
+
+        let score = null;
+        let percentage = null;
+        let status = "NA";
+
+        if (hasAttempt) {
+          const rawScore = typeof attempt.score === "number" ? attempt.score : 0;
+          score = rawScore;
+          if (effectiveMax > 0) {
+            percentage = (rawScore / effectiveMax) * 100;
+          }
+
+          if (attempt.status === "COMPLETED" && percentage !== null) {
+            status = percentage >= (trade.minPercent || 40) ? "PASS" : "FAIL";
+          } else {
+            status = attempt.status || "IN_PROGRESS";
+          }
+        } else if (selectedExamTypes.includes(type)) {
+          status = "SCHEDULED";
+        }
 
         return {
           type,
           score,
-          maxMarks,
+          maxMarks: effectiveMax,
           percentage: percentage !== null ? parseFloat(percentage.toFixed(2)) : null,
           status,
           submittedAt: attempt?.submittedAt || null
         };
       });
 
-    const practicalMarks = await prisma.practicalMarks.findUnique({
-      where: { candidateId: candidate.id }
-    });
+    let practicalMarks = null;
+    const aptitudeScores = { bpet: "NA", ppt: "NA", cpt: "NA" };
+    try {
+      practicalMarks = await prisma.practicalMarks.findUnique({
+        where: { candidateId: candidate.id },
+        select: {
+          pr1: true,
+          pr2: true,
+          pr3: true,
+          pr4: true,
+          pr5: true,
+          oral: true,
+          overallResult: true,
+          gradeOverride: true
+        }
+      });
+
+      if (practicalMarks) {
+        try {
+          const aptitudeColumns = await prisma.$queryRaw`
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'PracticalMarks'
+              AND COLUMN_NAME IN ('bpet', 'ppt', 'cpt')
+          `;
+
+          const availableColumns = new Set(
+            Array.isArray(aptitudeColumns)
+              ? aptitudeColumns.map((row) => row.COLUMN_NAME || row.column_name)
+              : []
+          );
+
+          if (availableColumns.size > 0) {
+            const selectFragments = [];
+            if (availableColumns.has("bpet")) selectFragments.push("`bpet`");
+            if (availableColumns.has("ppt")) selectFragments.push("`ppt`");
+            if (availableColumns.has("cpt")) selectFragments.push("`cpt`");
+
+          if (selectFragments.length > 0) {
+              const rawQuery = `SELECT ${selectFragments.join(", ")} FROM PracticalMarks WHERE candidateId = ? LIMIT 1`;
+              const aptitudeRows = await prisma.$queryRawUnsafe(rawQuery, candidate.id);
+              if (Array.isArray(aptitudeRows) && aptitudeRows.length > 0) {
+                const aptitudeRow = aptitudeRows[0];
+                if (availableColumns.has("bpet") && aptitudeRow.bpet != null) {
+                  aptitudeScores.bpet = aptitudeRow.bpet;
+                }
+                if (availableColumns.has("ppt") && aptitudeRow.ppt != null) {
+                  aptitudeScores.ppt = aptitudeRow.ppt;
+                }
+                if (availableColumns.has("cpt") && aptitudeRow.cpt != null) {
+                  aptitudeScores.cpt = aptitudeRow.cpt;
+                }
+              }
+            }
+          }
+        } catch (aptitudeError) {
+          console.warn(
+            "Aptitude marks lookup failed for candidate",
+            candidate.id,
+            aptitudeError.message
+          );
+        }
+      }
+    } catch (practicalError) {
+      console.warn(
+        "Practical marks lookup failed for candidate",
+        candidate.id,
+        practicalError.message
+      );
+    }
 
     const practicalResults = practicalTypes
       .filter(({ flag }) => trade[flag])
       .map(({ type }) => {
-        const value = practicalMarks ? practicalMarks[type.replace("-", "").toLowerCase()] : null;
+        const fieldName = PRACTICAL_FIELD_MAP[type];
+        const value = practicalMarks && fieldName ? practicalMarks[fieldName] : null;
         const parsed = value !== null && value !== undefined ? Number(value) : null;
         const maxMarks = PAPER_MAX_MARKS[type];
         const percentage = parsed !== null && maxMarks ? (parsed / maxMarks) * 100 : null;
@@ -160,25 +257,21 @@ exports.getResult = async (req, res) => {
     let totalMax = 0;
 
     writtenResults.forEach((result) => {
-      if (result.maxMarks) {
+      if (result.score !== null && result.maxMarks) {
         totalMax += result.maxMarks;
-        totalScore += result.score ?? 0;
+        totalScore += result.score;
         if (result.percentage !== null) {
           componentPercents.push(result.percentage);
-        } else {
-          componentPercents.push(0);
         }
       }
     });
 
     practicalResults.forEach((result) => {
-      if (result.maxMarks) {
+      if (result.marks !== null && result.maxMarks) {
         totalMax += result.maxMarks;
-        totalScore += result.marks ?? 0;
+        totalScore += result.marks;
         if (result.percentage !== null) {
           componentPercents.push(result.percentage);
-        } else {
-          componentPercents.push(0);
         }
       }
     });
@@ -193,18 +286,27 @@ exports.getResult = async (req, res) => {
     const overallResult = practicalMarks?.overallResult
       || (overallPercent >= (trade.minPercent || 40) ? "PASS" : "FAIL");
 
+    const theoryResultsForUi = writtenResults.map((result) => ({
+      paper: result.type,
+      score: result.score,
+      totalMarks: result.maxMarks,
+      percentage: result.percentage,
+      status: result.status,
+      submittedAt: result.submittedAt
+    }));
+
     res.json({
       candidate: {
         id: candidate.id,
         armyNo: candidate.armyNo,
         name: candidate.name,
-        rank: candidate.rank.name,
-        trade: candidate.trade.name,
+        rank: candidate.rank?.name || null,
+        trade: candidate.trade?.name || null,
         unit: candidate.unit,
         medCat: candidate.medCat,
         corps: candidate.corps,
-        command: candidate.command.name,
-        center: candidate.center.name
+        command: candidate.command?.name || null,
+        center: candidate.center?.name || null
       },
       trade: {
         id: trade.id,
@@ -213,6 +315,7 @@ exports.getResult = async (req, res) => {
         negativeMarking: trade.negativeMarking || 0
       },
       writtenResults,
+      theoryResults: theoryResultsForUi,
       practicalResults,
       summary: {
         totalScore: parseFloat(totalScore.toFixed(2)),
@@ -223,19 +326,16 @@ exports.getResult = async (req, res) => {
         gradeSource: gradeInfo.source,
         componentPercents: componentPercents.map((value) => parseFloat(value.toFixed(2))),
         overallResult,
-        bpet: practicalMarks?.bpet || "NA",
-        ppt: practicalMarks?.ppt || "NA",
-        cpt: practicalMarks?.cpt || "NA",
+        bpet: aptitudeScores.bpet,
+        ppt: aptitudeScores.ppt,
+        cpt: aptitudeScores.cpt,
         minComponentPercent: gradeInfo.minComponent ?? null
       },
       gradingTable: GRADE_TABLE,
-      aptitude: {
-        bpet: practicalMarks?.bpet || "NA",
-        ppt: practicalMarks?.ppt || "NA",
-        cpt: practicalMarks?.cpt || "NA"
-      }
+      aptitude: { ...aptitudeScores }
     });
   } catch (error) {
+    console.error("Error generating result for candidate", req.params.candidateId, error);
     res.status(500).json({ error: error.message });
   }
 };

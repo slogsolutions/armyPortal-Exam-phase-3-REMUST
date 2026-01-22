@@ -1,0 +1,47 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  
+  /* Army Theme Colors */
+  --army-green: #2c4c2c;
+  --army-dark-green: #1a2e1a;
+  --army-gold: #c8b072;
+  --army-tan: #d6c28e;
+  --army-light-green: #3d6b3d;
+  
+  /* Dark Theme Colors */
+  --bg-dark: #0e1a14;
+  --bg-darker: #13251c;
+  --border-color: #355f3e;
+  --text-gold: #d4af37;
+  --text-light: #d6c28e;
+  
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--army-dark-green);
+  color: var(--text-light);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}

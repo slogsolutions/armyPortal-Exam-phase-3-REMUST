@@ -1,0 +1,206 @@
+.exam-officer-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a2e1a 0%, #2c4c2c 100%);
+  padding: 30px;
+  font-family: Arial, sans-serif;
+}
+
+.exam-officer-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #0e1a14;
+  border-radius: 10px;
+  padding: 30px;
+  color: #d4af37;
+}
+
+.exam-officer-container h1 {
+  color: #c8b072;
+  margin-bottom: 25px;
+  text-align: center;
+  font-size: 22px;
+  border-bottom: 2px solid #355f3e;
+  padding-bottom: 15px;
+}
+
+.officer-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.candidate-selection-section,
+.marks-entry-section {
+  background: #13251c;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #355f3e;
+}
+
+.candidate-selection-section h2,
+.marks-entry-section h2 {
+  color: #c8b072;
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  border-bottom: 1px solid #355f3e;
+  padding-bottom: 10px;
+}
+
+.candidate-search select {
+  width: 100%;
+  padding: 10px;
+  background: #0e1a14;
+  border: 1px solid #355f3e;
+  color: #fff;
+  border-radius: 5px;
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+
+.candidate-info h3 {
+  color: #c8b072;
+  margin: 15px 0 10px 0;
+  font-size: 14px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  gap: 8px;
+}
+
+.info-item label {
+  font-weight: bold;
+  color: #c8b072;
+  min-width: 80px;
+  font-size: 12px;
+}
+
+.info-item span {
+  color: #d6c28e;
+  font-size: 12px;
+}
+
+.current-marks {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #355f3e;
+}
+
+.current-marks h4 {
+  color: #c8b072;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.marks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.mark-item {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: #0e1a14;
+  border-radius: 5px;
+  border: 1px solid #355f3e;
+}
+
+.mark-item label {
+  font-weight: bold;
+  color: #c8b072;
+  font-size: 12px;
+}
+
+.mark-item span {
+  color: #d6c28e;
+  font-size: 12px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: #d6c28e;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  background: #0e1a14;
+  border: 1px solid #355f3e;
+  color: #fff;
+  border-radius: 5px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #c8b072;
+}
+
+.message {
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 15px;
+  font-size: 12px;
+}
+
+.message.success {
+  background: #1a4a1a;
+  color: #90ee90;
+  border: 1px solid #355f3e;
+}
+
+.message.error {
+  background: #4a1a1a;
+  color: #ff6b6b;
+  border: 1px solid #5a2a2a;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: #d4af37;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.3s;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #c8b072;
+}
+
+.submit-btn:disabled {
+  background: #555;
+  color: #888;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 1024px) {
+  .officer-content {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,158 @@
+.instructions-page {
+  min-height: 100vh;
+  background: url("/army-bg.jpg") center/cover no-repeat;
+  position: relative;
+  font-family: Arial, sans-serif;
+  padding: 40px 20px;
+}
+
+.instructions-container {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto;
+  background: #0e1a14;
+  border-radius: 10px;
+  padding: 30px;
+  color: #d4af37;
+  z-index: 1;
+}
+
+.instructions-header {
+  text-align: center;
+  margin-bottom: 25px;
+  border-bottom: 2px solid #355f3e;
+  padding-bottom: 15px;
+}
+
+.instructions-header h1 {
+  color: #c8b072;
+  margin: 0 0 8px 0;
+  font-size: 22px;
+}
+
+.instructions-header h2 {
+  color: #d6c28e;
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.instructions-header h3 {
+  color: #ffd700;
+  margin: 0;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.instructions-content {
+  margin-bottom: 25px;
+}
+
+.instruction-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #13251c;
+  border-left: 4px solid #355f3e;
+  border-radius: 5px;
+}
+
+.instruction-section h4 {
+  color: #c8b072;
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.instruction-section ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #d6c28e;
+}
+
+.instruction-section li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+  font-size: 12px;
+}
+
+.instruction-section li strong {
+  color: #ffd700;
+}
+
+.warning-box {
+  background: #2a1f0e;
+  border-left-color: #ffd700;
+}
+
+.warning-box h4 {
+  color: #ffd700;
+}
+
+.agreement-section {
+  margin: 25px 0;
+  padding: 15px;
+  background: #13251c;
+  border-radius: 5px;
+  border: 1px solid #355f3e;
+}
+
+.agreement-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.agreement-checkbox input[type="checkbox"] {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.agreement-checkbox span {
+  flex: 1;
+  line-height: 1.6;
+  color: #d6c28e;
+  font-size: 12px;
+}
+
+.instructions-footer {
+  text-align: center;
+  padding-top: 15px;
+  border-top: 2px solid #355f3e;
+}
+
+.ready-button {
+  background: #d4af37;
+  color: #000;
+  border: none;
+  padding: 12px 40px;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.ready-button:hover:not(:disabled) {
+  background: #c8b072;
+  transform: translateY(-1px);
+}
+
+.ready-button:disabled {
+  background: #555;
+  color: #888;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+  .instructions-container {
+    padding: 20px;
+  }
+
+  .instructions-header h1 {
+    font-size: 18px;
+  }
+}

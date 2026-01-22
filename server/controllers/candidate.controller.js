@@ -77,7 +77,6 @@ const loadCandidateDetail = async (candidateId) => {
       trade: true,
       command: true,
       center: true,
-      practicalMarks: true,
       examSlots: {
         include: {
           trade: true,
