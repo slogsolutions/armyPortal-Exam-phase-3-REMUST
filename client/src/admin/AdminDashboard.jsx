@@ -12,6 +12,7 @@ import UploadPaper from "./UploadPaper";
 import ExamSlots from "./ExamSlots";
 import PracticalMarks from "./PracticalMarks";
 import Results from "./Results";
+import CandidateManager from "./CandidateManager";
 import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
@@ -73,6 +74,12 @@ export default function AdminDashboard() {
       label: "Practical Marks",
       icon: "✏️",
       path: "/admin/practical-marks"
+    },
+    {
+      id: "candidates",
+      label: "Candidates",
+      icon: "🧑‍🎓",
+      path: "/admin/candidates"
     },
     {
       id: "results",
@@ -177,6 +184,7 @@ export default function AdminDashboard() {
             <Route path="upload-paper" element={<UploadPaper />} />
             <Route path="exam-slots" element={<ExamSlots />} />
             <Route path="practical-marks" element={<PracticalMarks />} />
+            <Route path="candidates" element={<CandidateManager />} />
             <Route path="results" element={<Results />} />
           </Routes>
         </div>

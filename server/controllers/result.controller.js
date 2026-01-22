@@ -1,6 +1,64 @@
 const prisma = require("../config/prisma");
 const XLSX = require("xlsx");
 
+const GRADE_TABLE = [
+  { grade: "A", minEach: 75, minOverall: 80 },
+  { grade: "B", minEach: 60, minOverall: 70 },
+  { grade: "C", minEach: 50, minOverall: 60 },
+  { grade: "D", minEach: 45, minOverall: 50 },
+  { grade: "E", minEach: 35, minOverall: 40 }
+];
+
+const PAPER_MAX_MARKS = {
+  "WP-I": 100,
+  "WP-II": 100,
+  "WP-III": 100,
+  "PR-I": 50,
+  "PR-II": 50,
+  "PR-III": 50,
+  "PR-IV": 50,
+  "PR-V": 50,
+  ORAL: 50
+};
+
+const getSelectedExamTypes = (candidate) => {
+  if (!candidate.selectedExamTypes) return [];
+  try {
+    const parsed = JSON.parse(candidate.selectedExamTypes);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const computeGrade = ({ componentPercents, overallPercent, override }) => {
+  if (override) {
+    return { grade: override, source: "override" };
+  }
+
+  if (componentPercents.length === 0) {
+    return { grade: "NA", source: "insufficient" };
+  }
+
+  const minComponent = Math.min(...componentPercents);
+
+  const achieved = GRADE_TABLE.find((row) => {
+    return (
+      componentPercents.every((percent) => percent >= row.minEach) &&
+      overallPercent >= row.minOverall
+    );
+  });
+
+  if (!achieved) {
+    if (overallPercent >= 0) {
+      return { grade: "F", source: "computed", minComponent };
+    }
+    return { grade: "NA", source: "insufficient", minComponent };
+  }
+
+  return { grade: achieved.grade, source: "computed", minComponent };
+};
+
 /**
  * Full Army-style result
  */
@@ -25,87 +83,115 @@ exports.getResult = async (req, res) => {
     const attempts = await prisma.examAttempt.findMany({
       where: { candidateId },
       include: {
-        examPaper: {
-          include: {
-            questions: true
-          }
-        },
-        answers: {
-          include: {
-            question: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'asc'
+        examPaper: true
       }
     });
 
-    // Create a map of paper types to results
-    const resultsMap = {};
-    
-    attempts.forEach(attempt => {
-      resultsMap[attempt.examPaper.paperType] = {
-        paper: attempt.examPaper.paperType,
-        score: attempt.score,
-        totalMarks: attempt.totalMarks,
-        percentage: parseFloat(attempt.percentage.toFixed(2)),
-        status: attempt.status,
-        submittedAt: attempt.submittedAt
-      };
+    const attemptMap = new Map();
+    attempts.forEach((attempt) => {
+      attemptMap.set(attempt.examPaper.paperType, attempt);
     });
 
-    // Get all available exam types for this trade
+    const selectedExamTypes = getSelectedExamTypes(candidate);
     const trade = candidate.trade;
-    const examTypes = [];
-    
-    if (trade.wp1) examTypes.push({ type: "WP-I", label: "WP-I" });
-    if (trade.wp2) examTypes.push({ type: "WP-II", label: "WP-II" });
-    if (trade.wp3) examTypes.push({ type: "WP-III", label: "WP-III" });
-    if (trade.pr1) examTypes.push({ type: "PR-I", label: "PR-I" });
-    if (trade.pr2) examTypes.push({ type: "PR-II", label: "PR-II" });
-    if (trade.pr3) examTypes.push({ type: "PR-III", label: "PR-III" });
-    if (trade.pr4) examTypes.push({ type: "PR-IV", label: "PR-IV" });
-    if (trade.pr5) examTypes.push({ type: "PR-V", label: "PR-V" });
-    if (trade.oral) examTypes.push({ type: "ORAL", label: "ORAL" });
 
-    // Parse selected exam types
-    const selectedTypes = candidate.selectedExamTypes 
-      ? JSON.parse(candidate.selectedExamTypes) 
-      : [];
+    const writtenTypes = [
+      { flag: "wp1", type: "WP-I" },
+      { flag: "wp2", type: "WP-II" },
+      { flag: "wp3", type: "WP-III" }
+    ];
 
-    // Only show WP-I, WP-II, and WP-III for theory results
-    const writtenExamTypes = examTypes.filter(et => 
-      ["WP-I", "WP-II", "WP-III"].includes(et.type) && selectedTypes.includes(et.type)
-    );
+    const practicalTypes = [
+      { flag: "pr1", type: "PR-I" },
+      { flag: "pr2", type: "PR-II" },
+      { flag: "pr3", type: "PR-III" },
+      { flag: "pr4", type: "PR-IV" },
+      { flag: "pr5", type: "PR-V" },
+      { flag: "oral", type: "ORAL" }
+    ];
 
-    // Build theory results array
-    const theoryResults = writtenExamTypes.map(examType => {
-      if (resultsMap[examType.type]) {
-        return resultsMap[examType.type];
-      }
-      return {
-        paper: examType.label,
-        status: "NA",
-        score: null,
-        totalMarks: null,
-        percentage: null
-      };
-    });
+    const writtenResults = writtenTypes
+      .filter(({ flag }) => trade[flag])
+      .map(({ type }) => {
+        const attempt = attemptMap.get(type);
+        const maxMarks = attempt?.totalMarks ?? PAPER_MAX_MARKS[type] ?? 0;
+        const participated = attempt && selectedExamTypes.includes(type);
+        const score = participated ? attempt.score : null;
+        const percentage = participated && maxMarks > 0 ? (attempt.score / maxMarks) * 100 : null;
+        const status = participated
+          ? attempt.status === "COMPLETED" && percentage !== null
+            ? percentage >= (trade.minPercent || 40)
+              ? "PASS"
+              : "FAIL"
+            : attempt.status
+          : "NA";
 
-    // Get practical marks
+        return {
+          type,
+          score,
+          maxMarks,
+          percentage: percentage !== null ? parseFloat(percentage.toFixed(2)) : null,
+          status,
+          submittedAt: attempt?.submittedAt || null
+        };
+      });
+
     const practicalMarks = await prisma.practicalMarks.findUnique({
       where: { candidateId: candidate.id }
     });
 
-    // Build practical results array
-    const practicalResults = [];
-    if (trade.pr1) practicalResults.push({ type: "PR-I", marks: practicalMarks?.pr1 || null });
-    if (trade.pr2) practicalResults.push({ type: "PR-II", marks: practicalMarks?.pr2 || null });
-    if (trade.pr3) practicalResults.push({ type: "PR-III", marks: practicalMarks?.pr3 || null });
-    if (trade.pr4) practicalResults.push({ type: "PR-IV", marks: practicalMarks?.pr4 || null });
-    if (trade.pr5) practicalResults.push({ type: "PR-V", marks: practicalMarks?.pr5 || null });
-    if (trade.oral) practicalResults.push({ type: "ORAL", marks: practicalMarks?.oral || null });
+    const practicalResults = practicalTypes
+      .filter(({ flag }) => trade[flag])
+      .map(({ type }) => {
+        const value = practicalMarks ? practicalMarks[type.replace("-", "").toLowerCase()] : null;
+        const parsed = value !== null && value !== undefined ? Number(value) : null;
+        const maxMarks = PAPER_MAX_MARKS[type];
+        const percentage = parsed !== null && maxMarks ? (parsed / maxMarks) * 100 : null;
+        return {
+          type,
+          marks: parsed,
+          maxMarks,
+          percentage: percentage !== null ? parseFloat(percentage.toFixed(2)) : null
+        };
+      });
+
+    const componentPercents = [];
+    let totalScore = 0;
+    let totalMax = 0;
+
+    writtenResults.forEach((result) => {
+      if (result.maxMarks) {
+        totalMax += result.maxMarks;
+        totalScore += result.score ?? 0;
+        if (result.percentage !== null) {
+          componentPercents.push(result.percentage);
+        } else {
+          componentPercents.push(0);
+        }
+      }
+    });
+
+    practicalResults.forEach((result) => {
+      if (result.maxMarks) {
+        totalMax += result.maxMarks;
+        totalScore += result.marks ?? 0;
+        if (result.percentage !== null) {
+          componentPercents.push(result.percentage);
+        } else {
+          componentPercents.push(0);
+        }
+      }
+    });
+
+    const overallPercent = totalMax > 0 ? (totalScore / totalMax) * 100 : 0;
+    const gradeInfo = computeGrade({
+      componentPercents,
+      overallPercent,
+      override: practicalMarks?.gradeOverride
+    });
+
+    const overallResult = practicalMarks?.overallResult
+      || (overallPercent >= (trade.minPercent || 40) ? "PASS" : "FAIL");
 
     res.json({
       candidate: {
@@ -120,9 +206,34 @@ exports.getResult = async (req, res) => {
         command: candidate.command.name,
         center: candidate.center.name
       },
-      theoryResults,
+      trade: {
+        id: trade.id,
+        name: trade.name,
+        minPercent: trade.minPercent || 40,
+        negativeMarking: trade.negativeMarking || 0
+      },
+      writtenResults,
       practicalResults,
-      trade
+      summary: {
+        totalScore: parseFloat(totalScore.toFixed(2)),
+        totalMax,
+        overallPercent: parseFloat(overallPercent.toFixed(2)),
+        minPercent: trade.minPercent || 40,
+        grade: gradeInfo.grade,
+        gradeSource: gradeInfo.source,
+        componentPercents: componentPercents.map((value) => parseFloat(value.toFixed(2))),
+        overallResult,
+        bpet: practicalMarks?.bpet || "NA",
+        ppt: practicalMarks?.ppt || "NA",
+        cpt: practicalMarks?.cpt || "NA",
+        minComponentPercent: gradeInfo.minComponent ?? null
+      },
+      gradingTable: GRADE_TABLE,
+      aptitude: {
+        bpet: practicalMarks?.bpet || "NA",
+        ppt: practicalMarks?.ppt || "NA",
+        cpt: practicalMarks?.cpt || "NA"
+      }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

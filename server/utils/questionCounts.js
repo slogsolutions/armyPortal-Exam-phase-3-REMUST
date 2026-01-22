@@ -27,17 +27,31 @@ const attachQuestionCounts = async (slots = [], prismaClient) => {
   if (orConditions.length > 0) {
     const papers = await prismaClient.examPaper.findMany({
       where: { OR: orConditions },
-      include: {
-        _count: {
-          select: { questions: true }
-        }
+      select: {
+        id: true,
+        tradeId: true,
+        paperType: true
       }
     });
 
-    papers.forEach((paper) => {
-      const key = `${paper.tradeId}-${paper.paperType}`;
-      pairToCount.set(key, paper._count?.questions ?? 0);
-    });
+    if (papers.length > 0) {
+      const questionGroups = await prismaClient.question.groupBy({
+        by: ["examPaperId"],
+        where: {
+          examPaperId: { in: papers.map((paper) => paper.id) }
+        },
+        _count: { examPaperId: true }
+      });
+
+      const idToCount = new Map(
+        questionGroups.map((group) => [group.examPaperId, group._count.examPaperId])
+      );
+
+      papers.forEach((paper) => {
+        const key = `${paper.tradeId}-${paper.paperType}`;
+        pairToCount.set(key, idToCount.get(paper.id) || 0);
+      });
+    }
   }
 
   return slots.map((slot) => {

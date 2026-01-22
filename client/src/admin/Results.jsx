@@ -110,6 +110,14 @@ export default function Results() {
     setExportType(type);
   };
 
+  const formatPercent = (value, digits = 2) =>
+    typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(digits)}%` : "NA";
+
+  const formatNumber = (value, digits = 2) =>
+    typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "NA";
+
+  const formatDate = (value) => (value ? new Date(value).toLocaleDateString() : "—");
+
   const renderAllResults = () => (
     <div className="results-table-container">
       <table className="results-table">
@@ -140,15 +148,15 @@ export default function Results() {
               <td>{result.candidate?.command?.name}</td>
               <td>{result.candidate?.center?.name}</td>
               <td>{result.examPaper?.paperType}</td>
-              <td>{result.score}</td>
-              <td>{result.totalMarks}</td>
-              <td>{result.percentage?.toFixed(2)}%</td>
+              <td>{formatNumber(result.score, 2)}</td>
+              <td>{formatNumber(result.totalMarks, 2)}</td>
+              <td>{formatPercent(result.percentage)}</td>
               <td>
-                <span className={`status-badge ${result.percentage >= 40 ? 'pass' : 'fail'}`}>
-                  {result.percentage >= 40 ? 'PASS' : 'FAIL'}
+                <span className={`status-badge ${typeof result.percentage === "number" && result.percentage >= 40 ? 'pass' : 'fail'}`}>
+                  {typeof result.percentage === "number" && result.percentage >= 40 ? 'PASS' : 'FAIL'}
                 </span>
               </td>
-              <td>{new Date(result.submittedAt).toLocaleDateString()}</td>
+              <td>{formatDate(result.submittedAt)}</td>
               <td>{result.examSlot?.location || 'N/A'}</td>
             </tr>
           ))}
@@ -181,19 +189,19 @@ export default function Results() {
             </div>
             <div className="stat">
               <span className="label">Average Score:</span>
-              <span className="value">{trade.averageScore.toFixed(2)}%</span>
+              <span className="value">{formatPercent(trade.averageScore)}</span>
             </div>
           </div>
           
           <div className="paper-breakdown">
             <h4>Paper Type Breakdown</h4>
-            {trade.paperBreakdown.map((paper, pIndex) => (
+            {trade.paperBreakdown?.map((paper, pIndex) => (
               <div key={pIndex} className="paper-stat">
                 <span className="paper-type">{paper.paperType}</span>
                 <div className="paper-details">
-                  <span>Attempts: {paper.attempts}</span>
-                  <span>Passed: {paper.passed}</span>
-                  <span>Avg: {paper.averageScore.toFixed(1)}%</span>
+                  <span>Attempts: {paper.attempts ?? 0}</span>
+                  <span>Passed: {paper.passed ?? 0}</span>
+                  <span>Avg: {formatPercent(paper.averageScore, 1)}</span>
                 </div>
               </div>
             ))}
@@ -222,7 +230,7 @@ export default function Results() {
           <div className="candidate-stats">
             <div className="stat">
               <span className="label">Selected Exams:</span>
-              <span className="value">{candidate.selectedExamTypes.join(', ')}</span>
+              <span className="value">{Array.isArray(candidate.selectedExamTypes) && candidate.selectedExamTypes.length > 0 ? candidate.selectedExamTypes.join(', ') : 'NA'}</span>
             </div>
             <div className="stat">
               <span className="label">Completed:</span>
@@ -234,20 +242,20 @@ export default function Results() {
             </div>
             <div className="stat">
               <span className="label">Average Score:</span>
-              <span className="value">{candidate.averageScore.toFixed(2)}%</span>
+              <span className="value">{formatPercent(candidate.averageScore)}</span>
             </div>
           </div>
 
           <div className="written-results">
             <h4>Written Results</h4>
-            {candidate.writtenResults.map((result, rIndex) => (
+            {candidate.writtenResults?.map((result, rIndex) => (
               <div key={rIndex} className="written-result">
                 <span className="paper-type">{result.paperType}</span>
                 <span className={`status-badge ${result.status === 'PASS' ? 'pass' : 'fail'}`}>
                   {result.status}
                 </span>
-                <span className="score">{result.percentage.toFixed(1)}%</span>
-                <span className="date">{new Date(result.submittedAt).toLocaleDateString()}</span>
+                <span className="score">{formatPercent(result.percentage, 1)}</span>
+                <span className="date">{formatDate(result.submittedAt)}</span>
               </div>
             ))}
           </div>
@@ -256,37 +264,37 @@ export default function Results() {
             <div className="practical-results">
               <h4>Practical Marks</h4>
               <div className="practical-grid">
-                {candidate.practicalMarks.pr1 !== null && (
+                {candidate.practicalMarks.pr1 !== null && candidate.practicalMarks.pr1 !== undefined && (
                   <div className="practical-mark">
                     <span className="exam-type">PR-I:</span>
                     <span className="marks">{candidate.practicalMarks.pr1}</span>
                   </div>
                 )}
-                {candidate.practicalMarks.pr2 !== null && (
+                {candidate.practicalMarks.pr2 !== null && candidate.practicalMarks.pr2 !== undefined && (
                   <div className="practical-mark">
                     <span className="exam-type">PR-II:</span>
                     <span className="marks">{candidate.practicalMarks.pr2}</span>
                   </div>
                 )}
-                {candidate.practicalMarks.pr3 !== null && (
+                {candidate.practicalMarks.pr3 !== null && candidate.practicalMarks.pr3 !== undefined && (
                   <div className="practical-mark">
                     <span className="exam-type">PR-III:</span>
                     <span className="marks">{candidate.practicalMarks.pr3}</span>
                   </div>
                 )}
-                {candidate.practicalMarks.pr4 !== null && (
+                {candidate.practicalMarks.pr4 !== null && candidate.practicalMarks.pr4 !== undefined && (
                   <div className="practical-mark">
                     <span className="exam-type">PR-IV:</span>
                     <span className="marks">{candidate.practicalMarks.pr4}</span>
                   </div>
                 )}
-                {candidate.practicalMarks.pr5 !== null && (
+                {candidate.practicalMarks.pr5 !== null && candidate.practicalMarks.pr5 !== undefined && (
                   <div className="practical-mark">
                     <span className="exam-type">PR-V:</span>
                     <span className="marks">{candidate.practicalMarks.pr5}</span>
                   </div>
                 )}
-                {candidate.practicalMarks.oral !== null && (
+                {candidate.practicalMarks.oral !== null && candidate.practicalMarks.oral !== undefined && (
                   <div className="practical-mark">
                     <span className="exam-type">ORAL:</span>
                     <span className="marks">{candidate.practicalMarks.oral}</span>

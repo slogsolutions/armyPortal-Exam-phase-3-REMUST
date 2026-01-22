@@ -142,7 +142,17 @@ exports.getMasters = async (req, res) => {
   try {
     const [ranks, trades, commands, centers] = await Promise.all([
       prisma.rank.findMany({ orderBy: { name: "asc" } }),
-      prisma.trade.findMany({ orderBy: { name: "asc" } }),
+      prisma.trade.findMany({
+        orderBy: { name: "asc" },
+        include: {
+          _count: {
+            select: {
+              examPapers: true,
+              candidates: true
+            }
+          }
+        }
+      }),
       prisma.command.findMany({ orderBy: { name: "asc" } }),
       prisma.conductingCenter.findMany({
         orderBy: [{ commandId: "asc" }, { name: "asc" }],

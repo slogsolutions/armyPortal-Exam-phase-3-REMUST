@@ -5,15 +5,19 @@ const prisma = require("../config/prisma");
  */
 exports.submitPractical = async (req, res) => {
   try {
-    const { candidateId, examType, marks, enteredBy } = req.body;
+    const { candidateId, examType, marks, enteredBy, bpet, ppt, cpt, overallResult, gradeOverride } = req.body;
 
-    if (!candidateId || !examType || marks === undefined || marks === null || !enteredBy) {
+    if (!candidateId || !enteredBy) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    if ((marks === undefined || marks === null) && !examType && [bpet, ppt, cpt, overallResult, gradeOverride].every((value) => value === undefined)) {
+      return res.status(400).json({ error: "Provide either exam marks or additional grading fields" });
     }
 
     // Validate examType - must be PR-I, PR-II, PR-III, PR-IV, PR-V, or ORAL
     const validTypes = ["PR-I", "PR-II", "PR-III", "PR-IV", "PR-V", "ORAL"];
-    if (!validTypes.includes(examType)) {
+    if (examType && !validTypes.includes(examType)) {
       return res.status(400).json({ error: "Invalid exam type. Must be PR-I, PR-II, PR-III, PR-IV, PR-V, or ORAL" });
     }
 
@@ -27,12 +31,20 @@ exports.submitPractical = async (req, res) => {
     };
 
     // Map exam type to field
-    if (examType === "PR-I") updateData.pr1 = parseFloat(marks);
-    else if (examType === "PR-II") updateData.pr2 = parseFloat(marks);
-    else if (examType === "PR-III") updateData.pr3 = parseFloat(marks);
-    else if (examType === "PR-IV") updateData.pr4 = parseFloat(marks);
-    else if (examType === "PR-V") updateData.pr5 = parseFloat(marks);
-    else if (examType === "ORAL") updateData.oral = parseFloat(marks);
+    if (examType) {
+      if (examType === "PR-I") updateData.pr1 = parseFloat(marks);
+      else if (examType === "PR-II") updateData.pr2 = parseFloat(marks);
+      else if (examType === "PR-III") updateData.pr3 = parseFloat(marks);
+      else if (examType === "PR-IV") updateData.pr4 = parseFloat(marks);
+      else if (examType === "PR-V") updateData.pr5 = parseFloat(marks);
+      else if (examType === "ORAL") updateData.oral = parseFloat(marks);
+    }
+
+    if (bpet !== undefined) updateData.bpet = bpet;
+    if (ppt !== undefined) updateData.ppt = ppt;
+    if (cpt !== undefined) updateData.cpt = cpt;
+    if (overallResult !== undefined) updateData.overallResult = overallResult;
+    if (gradeOverride !== undefined) updateData.gradeOverride = gradeOverride;
 
     if (practicalMarks) {
       practicalMarks = await prisma.practicalMarks.update({
@@ -115,7 +127,7 @@ exports.bulkSubmitPractical = async (req, res) => {
 
     for (const markEntry of marks) {
       try {
-        const { candidateId, pr1, pr2, pr3, pr4, pr5, oral } = markEntry;
+        const { candidateId, pr1, pr2, pr3, pr4, pr5, oral, bpet, ppt, cpt, overallResult, gradeOverride } = markEntry;
 
         if (!candidateId) {
           errors.push({ error: "candidateId is required", markEntry });
@@ -142,6 +154,11 @@ exports.bulkSubmitPractical = async (req, res) => {
         if (pr4 !== undefined && candidate.trade.pr4) updateData.pr4 = parseFloat(pr4);
         if (pr5 !== undefined && candidate.trade.pr5) updateData.pr5 = parseFloat(pr5);
         if (oral !== undefined && candidate.trade.oral) updateData.oral = parseFloat(oral);
+        if (bpet !== undefined) updateData.bpet = bpet;
+        if (ppt !== undefined) updateData.ppt = ppt;
+        if (cpt !== undefined) updateData.cpt = cpt;
+        if (overallResult !== undefined) updateData.overallResult = overallResult;
+        if (gradeOverride !== undefined) updateData.gradeOverride = gradeOverride;
 
         // Find or create practical marks record
         let practicalMarks = await prisma.practicalMarks.findUnique({

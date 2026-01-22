@@ -252,3 +252,68 @@
     padding: 0.75rem;
   }
 }
+
+/* =========================
+   FORCE ALL TEXT TO BLACK
+   ========================= */
+
+.masters-page,
+.masters-page * {
+  color: #000000;
+}
+
+/* Explicit fixes for common missed elements */
+
+.section-description,
+.loading-state,
+.empty-state p,
+.error-banner,
+.item-metadata span {
+  color: #000000;
+}
+
+/* Inputs & placeholders */
+.form-row input {
+  color: #000000;
+}
+
+.form-row input::placeholder {
+  color: #374151; /* dark gray, readable */
+}
+
+/* Buttons text */
+.form-row button,
+.tab-button,
+.item-actions button {
+  color: #000000;
+}
+
+/* Active tab button (override background contrast issues) */
+.tab-button.active {
+  color: #000000;
+}
+
+/* Metadata spacing fix (optional but nice) */
+.item-metadata {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+/* Loading / Empty states */
+.loading-state,
+.empty-state {
+  color: #000000;
+  font-weight: 500;
+}
+
+/* Error banner fix */
+.error-banner {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #000000;
+  font-weight: 500;
+}

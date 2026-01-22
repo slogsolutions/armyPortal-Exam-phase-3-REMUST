@@ -31,6 +31,7 @@ export default function AdminLogin() {
       // ✅ Store token & admin info
       localStorage.setItem("adminToken", res.data.token);
       localStorage.setItem("admin", JSON.stringify(res.data.admin));
+      localStorage.setItem("adminId", String(res.data.admin?.id || ""));
 
       navigate("/admin", { replace: true });
     } catch (err) {

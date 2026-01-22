@@ -9,8 +9,12 @@ router.post("/login", ctrl.login);
 /* ===== CANDIDATE REGISTRATION (PUBLIC) ===== */
 router.post("/register", ctrl.register);
 
-/* ===== GET CANDIDATE DATA (CANDIDATE ONLY) ===== */
-router.get("/:candidateId", isAuth(["CANDIDATE"]), ctrl.getCandidateById);
+/* ===== GET CANDIDATE DATA (CANDIDATE OR ADMIN) ===== */
+router.get("/:candidateId", isAuth(["CANDIDATE", "ADMIN"]), ctrl.getCandidateById);
+
+/* ===== UPDATE / DELETE CANDIDATE (ADMIN ONLY) ===== */
+router.put("/:candidateId", isAuth(["ADMIN"]), ctrl.updateCandidate);
+router.delete("/:candidateId", isAuth(["ADMIN"]), ctrl.deleteCandidate);
 
 /* ===== GET ALL CANDIDATES (ADMIN ONLY) ===== */
 router.get("/", isAuth(["ADMIN"]), ctrl.getAllCandidates);
