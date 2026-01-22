@@ -148,20 +148,20 @@ exports.startExam = async (req, res) => {
       });
 
       const completedTypes = completedWritten.map((attempt) => attempt.examPaper.paperType);
+      const alreadyCompleted = completedTypes.includes(resolvedPaperType);
+      if (alreadyCompleted) {
+        return res.status(403).json({
+          error: `${resolvedPaperType} already completed`,
+          completed: true
+        });
+      }
+
       const nextRequired = WRITTEN_SEQUENCE.find((type) => !completedTypes.includes(type));
 
       if (nextRequired && resolvedPaperType !== nextRequired) {
         return res.status(403).json({
           error: `You must complete ${nextRequired} before attempting ${resolvedPaperType}`,
           nextRequired
-        });
-      }
-
-      const alreadyCompleted = completedTypes.includes(resolvedPaperType);
-      if (alreadyCompleted) {
-        return res.status(403).json({
-          error: `${resolvedPaperType} already completed`,
-          completed: true
         });
       }
     }
