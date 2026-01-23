@@ -29,8 +29,14 @@
   color: white;
 }
 
-.add-candidate-btn {
-  background: #38b2ac;
+.header-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.add-candidate-btn,
+.bulk-assign-btn {
   color: white;
   border: none;
   padding: 10px 20px;
@@ -38,10 +44,28 @@
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
+  font-size: 14px;
+}
+
+.add-candidate-btn {
+  background: #38b2ac;
 }
 
 .add-candidate-btn:hover {
   background: #319795;
+}
+
+.bulk-assign-btn {
+  background: #3182ce;
+}
+
+.bulk-assign-btn:hover {
+  background: #2c5aa0;
+}
+
+.bulk-assign-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .search-filters {
@@ -546,7 +570,7 @@
 }
 
 .error-message {
-  background: #e53e3e;
+  background: #DFE7BC;
   color: white;
   padding: 10px;
   border-radius: 4px;
@@ -594,6 +618,132 @@
 .delete-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Slot Assignment Styles */
+.slot-assignments {
+  background: #374151;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.slot-assignments h3 {
+  margin: 0 0 12px 0;
+  color: #60a5fa;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.slot-info {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+}
+
+.slot-info .muted {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.slot-stats {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #a0aec0;
+}
+
+.slot-assignment-row {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slot-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+
+.exam-type-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.slot-selection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slot-select {
+  flex: 1;
+  background: #4a5568;
+  border: 1px solid #718096;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.slot-select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.slot-status {
+  min-width: 100px;
+}
+
+.slot-status .assigned {
+  color: #10b981;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.slot-status .unassigned {
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.no-slots-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+}
+
+.warning-icon {
+  font-size: 18px;
+  margin-top: 2px;
+}
+
+.no-slots-message div p {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+}
+
+.no-slots-message div p:last-child {
+  margin-bottom: 0;
+  font-size: 13px;
+  color: #a0aec0;
 }
 
 /* Responsive Design */

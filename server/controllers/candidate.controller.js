@@ -2,6 +2,95 @@ const prisma = require("../config/prisma");
 const { attachQuestionCounts } = require("../utils/questionCounts");
 const { recalcSlotCurrentCount } = require("../utils/slotUtils");
 
+// Function to auto-assign candidates to newly created slots
+const autoAssignCandidatesToSlot = async (slotId) => {
+  try {
+    const slot = await prisma.examSlot.findUnique({
+      where: { id: slotId },
+      include: { trade: true, command: true, center: true }
+    });
+
+    if (!slot) {
+      console.log('❌ Slot not found for auto-assignment:', slotId);
+      return;
+    }
+
+    console.log('🔄 Auto-assigning candidates to new slot:', {
+      slotId: slot.id,
+      trade: slot.trade?.name,
+      paperType: slot.paperType,
+      command: slot.command?.name,
+      center: slot.center?.name
+    });
+
+    // Find candidates who need this slot
+    const candidatesNeedingSlot = await prisma.candidate.findMany({
+      where: {
+        tradeId: slot.tradeId,
+        commandId: slot.commandId,
+        centerId: slot.centerId,
+        // Only candidates who don't already have a slot for this paper type
+        examSlots: {
+          none: {
+            paperType: slot.paperType,
+            isActive: true
+          }
+        }
+      },
+      include: {
+        trade: true,
+        command: true,
+        center: true
+      }
+    });
+
+    console.log(`📋 Found ${candidatesNeedingSlot.length} candidates needing ${slot.paperType} slots`);
+
+    if (candidatesNeedingSlot.length === 0) {
+      return;
+    }
+
+    // Assign candidates to the slot
+    const assignedCount = await prisma.$transaction(async (tx) => {
+      let count = 0;
+      
+      for (const candidate of candidatesNeedingSlot) {
+        try {
+          // Parse selectedExamTypes to check if candidate needs this paper type
+          const selectedTypes = JSON.parse(candidate.selectedExamTypes || "[]");
+          if (!selectedTypes.includes(slot.paperType)) {
+            continue;
+          }
+
+          await tx.candidate.update({
+            where: { id: candidate.id },
+            data: {
+              examSlots: {
+                connect: { id: slot.id }
+              }
+            }
+          });
+
+          console.log(`✅ Assigned candidate ${candidate.armyNo} to slot ${slot.id}`);
+          count++;
+        } catch (error) {
+          console.log(`⚠️ Failed to assign candidate ${candidate.armyNo}:`, error.message);
+        }
+      }
+
+      // Update slot current count
+      await recalcSlotCurrentCount(tx, slot.id);
+      
+      return count;
+    });
+
+    console.log(`🎯 Auto-assigned ${assignedCount} candidates to slot ${slot.id}`);
+    return assignedCount;
+  } catch (error) {
+    console.error('💥 Error in auto-assignment:', error);
+  }
+};
+
 const WRITTEN_PAPER_TYPES = [
   ["wp1", "WP-I"],
   ["wp2", "WP-II"],
@@ -75,6 +164,16 @@ const ensureSlotForPaper = async (candidate, paperType) => {
   if (!paperType) return null;
   const now = new Date();
 
+  console.log('🎯 Ensuring slot for paper:', {
+    candidateId: candidate.id,
+    armyNo: candidate.armyNo,
+    trade: candidate.trade?.name,
+    paperType,
+    command: candidate.command?.name,
+    center: candidate.center?.name
+  });
+
+  // First check if candidate is already assigned to a slot for this paper type
   const existingSlot = await prisma.examSlot.findFirst({
     where: {
       tradeId: candidate.tradeId,
@@ -90,20 +189,25 @@ const ensureSlotForPaper = async (candidate, paperType) => {
   });
 
   if (existingSlot) {
+    console.log('✅ Found existing slot assignment:', existingSlot.id);
     return existingSlot;
   }
 
+  // STRICT SLOT FILTERING: Must match trade, command, and center
   const slotFilters = {
     tradeId: candidate.tradeId,
     paperType,
-    commandId: candidate.commandId,
+    commandId: candidate.commandId, // MUST match command
     isActive: true,
-    startTime: { gte: now }
+    endTime: { gte: now } // Changed from startTime to endTime - allow assignment to ongoing slots
   };
 
+  // MUST match center if candidate has one assigned
   if (candidate.centerId) {
     slotFilters.centerId = candidate.centerId;
   }
+
+  console.log('🔍 Searching for available slots with filters:', slotFilters);
 
   const nextSlot = await prisma.examSlot.findFirst({
     where: slotFilters,
@@ -112,9 +216,23 @@ const ensureSlotForPaper = async (candidate, paperType) => {
   });
 
   if (!nextSlot) {
+    console.log('❌ No matching slots found for candidate:', {
+      trade: candidate.trade?.name,
+      paperType,
+      command: candidate.command?.name,
+      center: candidate.center?.name
+    });
     return null;
   }
 
+  console.log('✅ Found available slot:', {
+    slotId: nextSlot.id,
+    startTime: nextSlot.startTime,
+    command: nextSlot.command?.name,
+    center: nextSlot.center?.name
+  });
+
+  // Assign candidate to the slot
   try {
     await prisma.examSlot.update({
       where: { id: nextSlot.id },
@@ -125,7 +243,10 @@ const ensureSlotForPaper = async (candidate, paperType) => {
         }
       }
     });
+    
+    console.log('✅ Successfully assigned candidate to slot:', nextSlot.id);
   } catch (error) {
+    console.log('⚠️ Slot assignment error (possibly already connected):', error.message);
     // Ignore duplicate connection errors and continue
   }
 
@@ -201,24 +322,25 @@ exports.register = async (req, res) => {
       tradeId,
       commandId,
       centerId,
-      selectedExamTypes
+      selectedExamTypes,
+      slotIds
     } = req.body;
 
     // Validate selectedExamTypes
     if (!selectedExamTypes || !Array.isArray(selectedExamTypes) || selectedExamTypes.length === 0) {
       return res.status(400).json({
         success: false,
-        error: "Please select at least one exam type (WP-I, WP-II, or WP-III)"
+        error: "Please select at least one exam type (WP-I or WP-II)"
       });
     }
 
-    // Validate exam types
-    const validExamTypes = ["WP-I", "WP-II", "WP-III"];
+    // Validate exam types - only allow WP-I and WP-II since WP-III is not enabled for any trade
+    const validExamTypes = ["WP-I", "WP-II"];
     const invalidTypes = selectedExamTypes.filter(type => !validExamTypes.includes(type));
     if (invalidTypes.length > 0) {
       return res.status(400).json({
         success: false,
-        error: `Invalid exam types: ${invalidTypes.join(", ")}`
+        error: `Invalid exam types: ${invalidTypes.join(", ")}. Currently only WP-I and WP-II are available.`
       });
     }
 
@@ -244,26 +366,101 @@ exports.register = async (req, res) => {
       });
     }
 
-    const candidate = await prisma.candidate.create({
-      data: {
-        armyNo,
-        name,
-        unit,
-        medCat,
-        corps,
-        dob: new Date(dob),
-        doe: new Date(doe),
-        selectedExamTypes: stringifySelectedExamTypes(normalizedExamTypes),
-        rankId: Number(rankId),
-        tradeId: Number(tradeId),
-        commandId: Number(commandId),
-        centerId: centerId ? Number(centerId) : null
+    // Validate slot assignments if provided
+    const slotIdList = Array.isArray(slotIds)
+      ? slotIds.map((id) => Number(id)).filter((id) => !Number.isNaN(id))
+      : [];
+
+    if (slotIdList.length > 0) {
+      const slots = await prisma.examSlot.findMany({
+        where: { id: { in: slotIdList } },
+        include: {
+          trade: true,
+          command: true,
+          center: true
+        }
+      });
+
+      if (slots.length !== slotIdList.length) {
+        return res.status(400).json({
+          success: false,
+          error: "One or more exam slots not found"
+        });
       }
+
+      // Validate slot compatibility
+      for (const slot of slots) {
+        if (slot.tradeId !== Number(tradeId)) {
+          return res.status(400).json({
+            success: false,
+            error: `Slot ${slot.id} trade does not match candidate trade`
+          });
+        }
+
+        if (slot.commandId !== Number(commandId)) {
+          return res.status(400).json({
+            success: false,
+            error: `Slot ${slot.id} command does not match candidate command`
+          });
+        }
+
+        if (centerId && slot.centerId !== Number(centerId)) {
+          return res.status(400).json({
+            success: false,
+            error: `Slot ${slot.id} center does not match candidate center`
+          });
+        }
+
+        if (!normalizedExamTypes.includes(slot.paperType)) {
+          return res.status(400).json({
+            success: false,
+            error: `Slot ${slot.id} paper type (${slot.paperType}) is not in selected exam types`
+          });
+        }
+      }
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const candidate = await tx.candidate.create({
+        data: {
+          armyNo,
+          name,
+          unit,
+          medCat,
+          corps,
+          dob: new Date(dob),
+          doe: new Date(doe),
+          selectedExamTypes: stringifySelectedExamTypes(normalizedExamTypes),
+          rankId: Number(rankId),
+          tradeId: Number(tradeId),
+          commandId: Number(commandId),
+          centerId: centerId ? Number(centerId) : null
+        }
+      });
+
+      // Assign slots if provided
+      if (slotIdList.length > 0) {
+        await tx.candidate.update({
+          where: { id: candidate.id },
+          data: {
+            examSlots: {
+              connect: slotIdList.map((id) => ({ id }))
+            }
+          }
+        });
+
+        // Update slot current counts
+        await Promise.all(
+          slotIdList.map((slotId) => recalcSlotCurrentCount(tx, slotId))
+        );
+      }
+
+      return candidate;
     });
 
     res.json({
       success: true,
-      candidate
+      candidate: result
     });
   } catch (err) {
     res.status(400).json({
@@ -400,6 +597,22 @@ exports.login = async (req, res) => {
     }
 
     const assignedSlot = await ensureSlotForPaper(candidate, enforcedPaperType);
+
+    // CRITICAL FIX: Check if slot assignment was successful
+    if (!assignedSlot) {
+      console.log('❌ No exam slots available for candidate:', {
+        armyNo: candidate.armyNo,
+        trade: candidate.trade?.name,
+        paperType: enforcedPaperType,
+        command: candidate.command?.name,
+        center: candidate.center?.name
+      });
+      
+      return res.status(400).json({
+        success: false,
+        error: `No exam slots are available for ${enforcedPaperType} paper for your trade (${candidate.trade?.name}) in your command/center. Please contact the exam cell to create slots.`
+      });
+    }
 
     // Create a simple token for candidate
     const jwt = require("jsonwebtoken");
@@ -689,6 +902,48 @@ exports.getAllCandidates = async (req, res) => {
     res.json(mapped);
   } catch (error) {
     console.error("getAllCandidates error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Export the auto-assignment function for use by other controllers
+exports.autoAssignCandidatesToSlot = autoAssignCandidatesToSlot;
+
+// Function to assign all unassigned candidates to available slots
+exports.assignAllUnassignedCandidates = async (req, res) => {
+  try {
+    console.log('🔄 Starting bulk assignment of unassigned candidates...');
+    
+    // Get all active slots
+    const activeSlots = await prisma.examSlot.findMany({
+      where: {
+        isActive: true,
+        endTime: { gte: new Date() }
+      },
+      include: {
+        trade: true,
+        command: true,
+        center: true
+      }
+    });
+
+    console.log(`📋 Found ${activeSlots.length} active slots`);
+
+    let totalAssigned = 0;
+    
+    for (const slot of activeSlots) {
+      const assignedCount = await autoAssignCandidatesToSlot(slot.id);
+      totalAssigned += assignedCount;
+    }
+
+    res.json({
+      success: true,
+      message: `Bulk assignment completed. Assigned ${totalAssigned} candidates to slots.`,
+      totalAssigned,
+      slotsProcessed: activeSlots.length
+    });
+  } catch (error) {
+    console.error('💥 Error in bulk assignment:', error);
     res.status(500).json({ error: error.message });
   }
 };

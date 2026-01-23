@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { attachQuestionCounts, attachQuestionCount } = require("../utils/questionCounts");
+const { autoAssignCandidatesToSlot } = require("./candidate.controller");
 
 /**
  * Create exam slot
@@ -87,9 +88,17 @@ exports.createExamSlot = async (req, res) => {
       }
     });
 
+    // Auto-assign candidates to the newly created slot
+    console.log('🔄 Auto-assigning candidates to newly created slot:', examSlot.id);
+    const assignedCount = await autoAssignCandidatesToSlot(examSlot.id);
+    console.log(`✅ Auto-assigned ${assignedCount} candidates to slot ${examSlot.id}`);
+
     const enrichedSlot = await attachQuestionCount(examSlot, prisma);
 
-    res.json(enrichedSlot);
+    res.json({
+      ...enrichedSlot,
+      autoAssignedCandidates: assignedCount
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -413,8 +422,23 @@ exports.deleteExamSlot = async (req, res) => {
 };
 
 /**
- * Get slot details with candidates
+ * Manually trigger auto-assignment of candidates to a slot
  */
+exports.triggerAutoAssignment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const assignedCount = await autoAssignCandidatesToSlot(Number(id));
+    
+    res.json({
+      success: true,
+      message: `Auto-assigned ${assignedCount} candidates to slot ${id}`,
+      assignedCount
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 exports.getSlotDetails = async (req, res) => {
   try {
     const { id } = req.params;

@@ -568,3 +568,335 @@
   font-size: 12px;
   color: #cbd5e0;
 }
+.slot-restriction-notice {
+  background: #2d3748;
+  border: 1px solid #4a5568;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.slot-restriction-notice p {
+  margin: 4px 0;
+  color: #cbd5e0;
+}
+
+.slot-restriction-notice strong {
+  color: #38b2ac;
+}
+
+.no-slots-message {
+  background: #374151;
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  padding: 12px;
+  color: #fbbf24;
+  font-size: 13px;
+}
+
+.no-slots-message p {
+  margin: 4px 0;
+}
+
+.no-slots-message strong {
+  color: #f59e0b;
+}
+/* Enhanced Slot Assignment Styles */
+.exam-slot-assignments {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slot-assignment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.slot-assignment-header h4 {
+  color: #60a5fa;
+  margin: 0;
+  font-size: 16px;
+}
+
+.assignment-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #a0aec0;
+  min-width: 80px;
+}
+
+.progress-bar {
+  width: 100px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #3b82f6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.slot-restriction-notice {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 20px;
+}
+
+.slot-restriction-notice p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.candidate-info {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.candidate-info span {
+  font-size: 13px;
+  color: #a0aec0;
+}
+
+.slot-stats {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slot-stats span {
+  font-size: 13px;
+  color: #60a5fa;
+}
+
+.slot-assignment-row {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slot-assignment-row label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.exam-type-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.exam-type-badge.error {
+  background: #ef4444;
+}
+
+.slot-selection-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.slot-select {
+  flex: 1;
+  padding: 8px 12px;
+  background: #2d3748;
+  border: 1px solid #4a5568;
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+}
+
+.slot-select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.slot-info {
+  min-width: 120px;
+}
+
+.slot-assigned,
+.slot-unassigned {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.slot-assigned {
+  color: #10b981;
+}
+
+.slot-unassigned {
+  color: #f59e0b;
+}
+
+.status-icon {
+  font-size: 14px;
+}
+
+.status-text {
+  font-size: 12px;
+}
+
+.no-slots-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+}
+
+.no-slots-icon {
+  font-size: 20px;
+  margin-top: 2px;
+}
+
+.no-slots-content p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.no-slots-content p:last-child {
+  margin-bottom: 0;
+}
+
+.create-slots-hint {
+  color: #a0aec0;
+  font-size: 13px !important;
+}
+
+/* Enhanced Assigned Slots Summary */
+.no-assignments-message {
+  text-align: center;
+  padding: 30px;
+  color: #a0aec0;
+}
+
+.no-assignments-icon {
+  font-size: 48px;
+  margin-bottom: 15px;
+}
+
+.assigned-slots-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.assigned-slot-item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 15px;
+  transition: all 0.2s;
+}
+
+.assigned-slot-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.assigned-slot-item.error {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.slot-status.assigned {
+  color: #10b981;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.slot-status.error {
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.slot-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slot-time,
+.slot-location,
+.slot-capacity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.slot-label {
+  color: #a0aec0;
+  min-width: 80px;
+  font-size: 13px;
+}
+
+.slot-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #ef4444;
+  font-size: 13px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .candidate-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .slot-selection-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .slot-info {
+    min-width: auto;
+  }
+}

@@ -7,21 +7,31 @@ exports.submitPractical = async (req, res) => {
   try {
     const { candidateId, examType, marks, enteredBy, bpet, ppt, cpt, overallResult, gradeOverride } = req.body;
 
-    if (!candidateId || !enteredBy) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!candidateId) {
+      return res.status(400).json({ error: "candidateId is required" });
     }
 
-    if ((marks === undefined || marks === null) && !examType && [bpet, ppt, cpt, overallResult, gradeOverride].every((value) => value === undefined)) {
+    if (!enteredBy) {
+      return res.status(400).json({ error: "enteredBy (admin ID) is required" });
+    }
+
+    // Validate that we have at least some data to save
+    const hasMarks = marks !== undefined && marks !== null && marks !== "";
+    const hasExtras = [bpet, ppt, cpt, overallResult, gradeOverride].some(value => 
+      value !== undefined && value !== null && value !== ""
+    );
+
+    if (!hasMarks && !hasExtras) {
       return res.status(400).json({ error: "Provide either exam marks or additional grading fields" });
     }
 
-    // Validate examType - must be PR-I, PR-II, PR-III, PR-IV, PR-V, or ORAL
+    // Validate examType if marks are provided
     const validTypes = ["PR-I", "PR-II", "PR-III", "PR-IV", "PR-V", "ORAL"];
-    if (examType && !validTypes.includes(examType)) {
+    if (hasMarks && examType && !validTypes.includes(examType)) {
       return res.status(400).json({ error: "Invalid exam type. Must be PR-I, PR-II, PR-III, PR-IV, PR-V, or ORAL" });
     }
 
-    // Find or create practical marks record
+    // Find existing practical marks record
     let practicalMarks = await prisma.practicalMarks.findUnique({
       where: { candidateId: Number(candidateId) }
     });
@@ -30,28 +40,36 @@ exports.submitPractical = async (req, res) => {
       enteredBy: Number(enteredBy)
     };
 
-    // Map exam type to field
-    if (examType) {
-      if (examType === "PR-I") updateData.pr1 = parseFloat(marks);
-      else if (examType === "PR-II") updateData.pr2 = parseFloat(marks);
-      else if (examType === "PR-III") updateData.pr3 = parseFloat(marks);
-      else if (examType === "PR-IV") updateData.pr4 = parseFloat(marks);
-      else if (examType === "PR-V") updateData.pr5 = parseFloat(marks);
-      else if (examType === "ORAL") updateData.oral = parseFloat(marks);
+    // Map exam type to field if marks are provided
+    if (hasMarks && examType) {
+      const parsedMarks = parseFloat(marks);
+      if (isNaN(parsedMarks)) {
+        return res.status(400).json({ error: "Invalid marks value" });
+      }
+
+      if (examType === "PR-I") updateData.pr1 = parsedMarks;
+      else if (examType === "PR-II") updateData.pr2 = parsedMarks;
+      else if (examType === "PR-III") updateData.pr3 = parsedMarks;
+      else if (examType === "PR-IV") updateData.pr4 = parsedMarks;
+      else if (examType === "PR-V") updateData.pr5 = parsedMarks;
+      else if (examType === "ORAL") updateData.oral = parsedMarks;
     }
 
-    if (bpet !== undefined) updateData.bpet = bpet;
-    if (ppt !== undefined) updateData.ppt = ppt;
-    if (cpt !== undefined) updateData.cpt = cpt;
-    if (overallResult !== undefined) updateData.overallResult = overallResult;
-    if (gradeOverride !== undefined) updateData.gradeOverride = gradeOverride;
+    // Add extra fields if provided
+    if (bpet !== undefined && bpet !== null && bpet !== "") updateData.bpet = String(bpet).toUpperCase();
+    if (ppt !== undefined && ppt !== null && ppt !== "") updateData.ppt = String(ppt).toUpperCase();
+    if (cpt !== undefined && cpt !== null && cpt !== "") updateData.cpt = String(cpt).toUpperCase();
+    if (overallResult !== undefined && overallResult !== null && overallResult !== "") updateData.overallResult = String(overallResult).toUpperCase();
+    if (gradeOverride !== undefined && gradeOverride !== null && gradeOverride !== "") updateData.gradeOverride = String(gradeOverride).toUpperCase();
 
     if (practicalMarks) {
+      // Update existing record
       practicalMarks = await prisma.practicalMarks.update({
         where: { candidateId: Number(candidateId) },
         data: updateData
       });
     } else {
+      // Create new record
       practicalMarks = await prisma.practicalMarks.create({
         data: {
           candidateId: Number(candidateId),
@@ -62,6 +80,7 @@ exports.submitPractical = async (req, res) => {
 
     res.json({ success: true, practicalMarks });
   } catch (error) {
+    console.error("Error in submitPractical:", error);
     res.status(500).json({ error: error.message });
   }
 };

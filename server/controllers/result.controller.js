@@ -21,6 +21,15 @@ const PAPER_MAX_MARKS = {
   ORAL: 50
 };
 
+const PRACTICAL_FIELD_MAP = {
+  "PR-I": "pr1",
+  "PR-II": "pr2",
+  "PR-III": "pr3",
+  "PR-IV": "pr4",
+  "PR-V": "pr5",
+  "ORAL": "oral"
+};
+
 const getSelectedExamTypes = (candidate) => {
   if (!candidate.selectedExamTypes) return [];
   try {
@@ -66,6 +75,11 @@ exports.getResult = async (req, res) => {
   try {
     const candidateId = Number(req.params.candidateId);
 
+    // Validate candidateId
+    if (!candidateId || isNaN(candidateId)) {
+      return res.status(400).json({ error: "Invalid candidate ID" });
+    }
+
     const candidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
       include: {
@@ -89,11 +103,17 @@ exports.getResult = async (req, res) => {
 
     const attemptMap = new Map();
     attempts.forEach((attempt) => {
-      attemptMap.set(attempt.examPaper.paperType, attempt);
+      if (attempt && attempt.examPaper && attempt.examPaper.paperType) {
+        attemptMap.set(attempt.examPaper.paperType, attempt);
+      }
     });
 
     const selectedExamTypes = getSelectedExamTypes(candidate);
     const trade = candidate.trade;
+
+    if (!trade) {
+      return res.status(400).json({ error: "Candidate trade not found" });
+    }
 
     const writtenTypes = [
       { flag: "wp1", type: "WP-I" },
@@ -257,6 +277,7 @@ exports.getResult = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error("Error in getResult:", error);
     res.status(500).json({ error: error.message });
   }
 };

@@ -8,6 +8,7 @@ router.get("/", adminAuth, ctrl.getExamSlots);
 router.put("/:id", adminAuth, ctrl.updateExamSlot);
 router.delete("/:id", adminAuth, ctrl.deleteExamSlot);
 router.get("/:id", adminAuth, ctrl.getSlotDetails);
+router.post("/:id/auto-assign", adminAuth, ctrl.triggerAutoAssignment);
 
 // Candidate routes
 router.get("/candidate/:candidateId", ctrl.getAvailableSlots);

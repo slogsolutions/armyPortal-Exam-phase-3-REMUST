@@ -120,49 +120,43 @@ export default function PracticalMarks() {
         return;
       }
 
-      // Submit each practical mark
+      // Prepare all data in a single payload
       const trade = selectedCandidate.trade;
-      const promises = [];
-      const enqueueMark = (enabled, value, examType) => {
-        if (enabled && value !== "") {
-          promises.push(api.post("/practical/submit", {
-            candidateId: selectedCandidate.id,
-            examType,
-            marks: parseFloat(value),
-            enteredBy: adminId
-          }));
-        }
-      };
-
-      enqueueMark(trade.pr1, form.pr1, "PR-I");
-      enqueueMark(trade.pr2, form.pr2, "PR-II");
-      enqueueMark(trade.pr3, form.pr3, "PR-III");
-      enqueueMark(trade.pr4, form.pr4, "PR-IV");
-      enqueueMark(trade.pr5, form.pr5, "PR-V");
-      enqueueMark(trade.oral, form.oral, "ORAL");
-
-      const extrasPayload = {
+      const payload = {
         candidateId: selectedCandidate.id,
         enteredBy: adminId
       };
-      let hasExtras = false;
 
-      ["bpet", "ppt", "cpt", "gradeOverride", "overallResult"].forEach((field) => {
-        const value = form[field];
-        if (value !== undefined && value !== null && value !== "") {
-          extrasPayload[field] = typeof value === "string" ? value.toUpperCase() : value;
-          hasExtras = true;
-        }
+      // Add practical marks if enabled for the trade and values are provided
+      if (trade.pr1 && form.pr1 !== "") payload.pr1 = parseFloat(form.pr1);
+      if (trade.pr2 && form.pr2 !== "") payload.pr2 = parseFloat(form.pr2);
+      if (trade.pr3 && form.pr3 !== "") payload.pr3 = parseFloat(form.pr3);
+      if (trade.pr4 && form.pr4 !== "") payload.pr4 = parseFloat(form.pr4);
+      if (trade.pr5 && form.pr5 !== "") payload.pr5 = parseFloat(form.pr5);
+      if (trade.oral && form.oral !== "") payload.oral = parseFloat(form.oral);
+
+      // Add extra fields if provided
+      if (form.bpet !== "") payload.bpet = form.bpet;
+      if (form.ppt !== "") payload.ppt = form.ppt;
+      if (form.cpt !== "") payload.cpt = form.cpt;
+      if (form.gradeOverride !== "") payload.gradeOverride = form.gradeOverride;
+      if (form.overallResult !== "") payload.overallResult = form.overallResult;
+
+      // Use bulk submit for single candidate to handle all data at once
+      const response = await api.post("/practical/bulk-submit", {
+        marks: [payload],
+        enteredBy: adminId
       });
 
-      if (hasExtras) {
-        promises.push(api.post("/practical/submit", extrasPayload));
+      if (response.data.successful > 0) {
+        alert("Practical marks saved successfully!");
+        fetchData();
+      } else {
+        const errorMsg = response.data.errors?.[0]?.error || "Failed to save practical marks";
+        alert(errorMsg);
       }
-
-      await Promise.all(promises);
-      alert("Practical marks saved successfully!");
-      fetchData();
     } catch (error) {
+      console.error("Error saving practical marks:", error);
       alert(error.response?.data?.error || "Failed to save practical marks");
     }
   };

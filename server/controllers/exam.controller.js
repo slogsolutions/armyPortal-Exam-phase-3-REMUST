@@ -44,7 +44,7 @@ exports.getAvailablePapers = async (req, res) => {
 
     const candidate = await prisma.candidate.findUnique({
       where: { id: Number(candidateId) },
-      include: { trade: true }
+      include: { trade: true, command: true, center: true }
     });
 
     if (!candidate) {
@@ -56,11 +56,51 @@ exports.getAvailablePapers = async (req, res) => {
       ? JSON.parse(candidate.selectedExamTypes) 
       : [];
 
-    // Only get WP-I, WP-II, and WP-III papers
+    // CRITICAL: Check if candidate has valid slot assignments for their selected exam types
+    const now = new Date();
+    const availableSlots = await prisma.examSlot.findMany({
+      where: {
+        tradeId: candidate.tradeId,
+        commandId: candidate.commandId,
+        centerId: candidate.centerId || undefined,
+        paperType: { in: selectedTypes },
+        isActive: true,
+        startTime: { lte: now }, // Slot has started
+        endTime: { gte: now },   // Slot hasn't ended
+        candidates: {
+          some: { id: candidate.id } // Candidate is assigned to this slot
+        }
+      }
+    });
+
+    if (availableSlots.length === 0) {
+      console.log('❌ No active slots for candidate:', {
+        candidateId: candidate.id,
+        armyNo: candidate.armyNo,
+        trade: candidate.trade?.name,
+        command: candidate.command?.name,
+        center: candidate.center?.name,
+        selectedTypes
+      });
+      
+      return res.status(403).json({ 
+        error: "No active exam slots found for your trade and command/center. Please contact the exam cell.",
+        details: {
+          trade: candidate.trade?.name,
+          command: candidate.command?.name,
+          center: candidate.center?.name,
+          selectedExamTypes: selectedTypes
+        }
+      });
+    }
+
+    // Only get papers for which the candidate has active slots
+    const availablePaperTypes = availableSlots.map(slot => slot.paperType);
+    
     const papers = await prisma.examPaper.findMany({
       where: { 
         tradeId: candidate.tradeId,
-        paperType: { in: ["WP-I", "WP-II", "WP-III"] },
+        paperType: { in: availablePaperTypes },
         isActive: true
       },
       include: {
@@ -70,10 +110,16 @@ exports.getAvailablePapers = async (req, res) => {
       }
     });
 
-    // Filter papers to only include those selected by candidate
-    const availablePapers = papers.filter(p => selectedTypes.includes(p.paperType));
+    console.log('📋 Available papers for candidate:', {
+      candidateId: candidate.id,
+      armyNo: candidate.armyNo,
+      trade: candidate.trade?.name,
+      availableSlots: availableSlots.length,
+      availablePapers: papers.length,
+      paperTypes: papers.map(p => p.paperType)
+    });
 
-    res.json(availablePapers);
+    res.json(papers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

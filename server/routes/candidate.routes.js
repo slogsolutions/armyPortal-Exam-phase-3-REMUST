@@ -19,4 +19,7 @@ router.delete("/:candidateId", isAuth(["ADMIN"]), ctrl.deleteCandidate);
 /* ===== GET ALL CANDIDATES (ADMIN ONLY) ===== */
 router.get("/", isAuth(["ADMIN"]), ctrl.getAllCandidates);
 
+/* ===== BULK SLOT ASSIGNMENT (ADMIN ONLY) ===== */
+router.post("/bulk-assign-slots", isAuth(["ADMIN"]), ctrl.assignAllUnassignedCandidates);
+
 module.exports = router;
