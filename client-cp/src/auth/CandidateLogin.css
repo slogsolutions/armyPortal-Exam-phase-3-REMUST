@@ -226,11 +226,14 @@ button[type="submit"]:disabled {
   text-decoration: underline;
 }
 
+
+
 .footer-container {
   position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  bottom: 36px;
+  width: 100%;
+  transform: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
