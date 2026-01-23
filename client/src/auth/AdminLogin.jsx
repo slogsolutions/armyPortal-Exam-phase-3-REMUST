@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
+import shieldImg from "../../img/shield.jpg";
 import "./AdminLogin.css";
 
 export default function AdminLogin() {
@@ -26,16 +27,12 @@ export default function AdminLogin() {
 
     try {
       const res = await api.post("/auth/login", form);
-      console.log('🔐 Admin login response:', res.data);
-
-      // ✅ Store token & admin info
       localStorage.setItem("adminToken", res.data.token);
       localStorage.setItem("admin", JSON.stringify(res.data.admin));
       localStorage.setItem("adminId", String(res.data.admin?.id || ""));
 
       navigate("/admin", { replace: true });
     } catch (err) {
-      console.error('💥 Admin login error:', err);
       setError(
         err.response?.data?.msg ||
         "Invalid username or password"
@@ -46,52 +43,57 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="admin-login-page">
-      <div className="overlay"></div>
+    <div className="admin-login-screen">
+      <div className="admin-logo">
+        <img src={shieldImg} alt="Admin Shield" />
+        <span>Admin</span>
+      </div>
 
-      <div className="login-card">
-        <h1>ADMIN LOGIN</h1>
-        <h3>2 Signal Training Centre</h3>
+      <div className="admin-form-card">
+        <h2>JAI HIND! Welcome to 2 STC Online Exam Portal</h2>
 
         <form onSubmit={login}>
-          <div className="form-group">
-            <label>Username</label>
-            <input
-              type="text"
-              name="username"
-              value={form.username}
-              onChange={handleChange}
-              required
-              autoComplete="username"
-              disabled={loading}
-            />
+          <div className="input-field">
+            <label htmlFor="username">Username</label>
+            <div className="input-wrapper">
+              <input
+                id="username"
+                type="text"
+                name="username"
+                value={form.username}
+                onChange={handleChange}
+                required
+                autoComplete="username"
+                disabled={loading}
+                placeholder="Username"
+              />
+              <span className="input-icon" aria-hidden>👤</span>
+            </div>
           </div>
 
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              autoComplete="current-password"
-              disabled={loading}
-            />
+          <div className="input-field">
+            <label htmlFor="password">Password</label>
+            <div className="input-wrapper">
+              <input
+                id="password"
+                type="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                required
+                autoComplete="current-password"
+                disabled={loading}
+                placeholder="Password"
+              />
+              <span className="input-icon" aria-hidden>🔒</span>
+            </div>
           </div>
 
-          {error && <div className="error-message">{error}</div>}
+          {error && <div className="admin-error">{error}</div>}
 
           <button type="submit" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
+            {loading ? "Logging in..." : "Log In"}
           </button>
-
-          <div className="login-links">
-            <p>
-              Register Candidate? 
-              <a href="/admin/register-candidate">Add Candidate</a>
-            </p>
-          </div>
         </form>
       </div>
     </div>

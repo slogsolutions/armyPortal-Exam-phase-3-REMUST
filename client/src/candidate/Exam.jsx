@@ -17,9 +17,7 @@ export default function Exam() {
   const [examFinished, setExamFinished] = useState(false);
   const [showFocusModal, setShowFocusModal] = useState(false);
   const [fullscreenActive, setFullscreenActive] = useState(false);
-  const [startPayload, setStartPayload] = useState(null);
-  const [preparingExam, setPreparingExam] = useState(false);
-  const [startError, setStartError] = useState(null);
+  const [flaggedQuestions, setFlaggedQuestions] = useState(() => new Set());
   const intervalRef = useRef(null);
   const startTimeRef = useRef(null);
 
@@ -30,10 +28,10 @@ export default function Exam() {
         // First, get candidate to get tradeId
         const candidateRes = await api.get(`/candidate/${candidateId}`);
         const candidate = candidateRes.data;
-        
+
         // Get paper for this trade and paper type
         const paperRes = await api.get(`/exam/paper/${candidate.tradeId}/${paperType}`);
-        
+
         if (paperRes.data.status === "NA") {
           alert("Paper not available yet");
           navigate("/");
@@ -41,9 +39,13 @@ export default function Exam() {
         }
 
         setPaper(paperRes.data);
+        setAnswers({});
+        setFlaggedQuestions(new Set());
+        setCurrentQuestion(0);
         setTimeRemaining(3 * 60 * 60); // 3 hours default
 
-        const payload = {
+        // Start exam attempt
+        const startPayload = {
           candidateId: Number(candidateId),
           paperType,
           examPaperId: paperRes.data.id
@@ -51,11 +53,24 @@ export default function Exam() {
 
         const slotId = searchParams.get("slotId");
         if (slotId) {
-          payload.examSlotId = Number(slotId);
+          startPayload.examSlotId = Number(slotId);
         }
 
-        setStartPayload(payload);
-        setStartError(null);
+        const attemptRes = await api.post("/exam/start", startPayload);
+
+        setAttemptId(attemptRes.data.id);
+        startTimeRef.current = new Date();
+        setExamStarted(true);
+
+        if (!document.fullscreenElement) {
+          try {
+            await document.documentElement.requestFullscreen?.();
+          } catch (err) {
+            console.warn("Unable to enter fullscreen on start", err);
+          }
+        }
+
+        setFullscreenActive(Boolean(document.fullscreenElement));
       } catch (error) {
         console.error("Error loading paper:", error);
         const message = error.response?.data?.error || "Failed to load exam paper";
@@ -227,6 +242,18 @@ export default function Exam() {
     }));
   };
 
+  const toggleFlagQuestion = (questionId) => {
+    setFlaggedQuestions(prev => {
+      const next = new Set(prev);
+      if (next.has(questionId)) {
+        next.delete(questionId);
+      } else {
+        next.add(questionId);
+      }
+      return next;
+    });
+  };
+
   const submitExam = async ({ skipConfirm = false } = {}) => {
     if (examFinished) return false;
 
@@ -299,35 +326,7 @@ export default function Exam() {
     await submitExam({ skipConfirm: true });
   };
 
-  const handleBeginExam = async () => {
-    if (!startPayload || preparingExam) return;
-    setPreparingExam(true);
-    setStartError(null);
-    try {
-      const attemptRes = await api.post("/exam/start", startPayload);
-      setAttemptId(attemptRes.data.id);
-      startTimeRef.current = new Date();
-
-      if (!document.fullscreenElement) {
-        try {
-          await document.documentElement.requestFullscreen?.();
-        } catch (err) {
-          console.warn("Unable to enter fullscreen on start", err);
-        }
-      }
-
-      setExamStarted(true);
-      setFullscreenActive(Boolean(document.fullscreenElement));
-    } catch (error) {
-      console.error("Start exam error:", error);
-      const message = error.response?.data?.error || "Unable to start exam";
-      setStartError(message);
-    } finally {
-      setPreparingExam(false);
-    }
-  };
-
-  if (!paper) {
+  if (!paper || !examStarted) {
     return (
       <div className="exam-loading">
         <div className="loading-spinner"></div>
@@ -336,28 +335,23 @@ export default function Exam() {
     );
   }
 
-  if (paper && !examStarted) {
-    return (
-      <div className="exam-prep-screen">
-        <div className="exam-prep-card">
-          <h2>{paper.paperType} - {paper.trade?.name}</h2>
-          <p>Click below to enter fullscreen and begin your assessment. Please ensure you are ready before proceeding.</p>
-          {startError && <p className="prep-error">{startError}</p>}
-          <button
-            className="prep-start-btn"
-            onClick={handleBeginExam}
-            disabled={preparingExam || !startPayload}
-          >
-            {preparingExam ? "Preparing..." : "Enter Fullscreen & Begin Exam"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const currentQ = paper.questions[currentQuestion];
   const answeredCount = Object.keys(answers).length;
   const totalQuestions = paper.questions.length;
+  const tradeName = paper.trade?.name || paper.tradeName || paper.trade?.title || "";
+  const optionEntries = ["A", "B", "C", "D"]
+    .map((key) => {
+      const value = currentQ?.[`option${key}`];
+      return value ? { key, value } : null;
+    })
+    .filter(Boolean);
+  const hasObjectiveOptions = optionEntries.length > 0;
+  const questionText = currentQ.questionText || currentQ.text || "";
+  const marksValue = currentQ.marks !== undefined && currentQ.marks !== null
+    ? Number(currentQ.marks).toFixed(2)
+    : "";
+  const isCurrentFlagged = flaggedQuestions.has(currentQ.id);
+  const isTimeCritical = timeRemaining <= 5 * 60;
 
   const focusTitle = fullscreenActive ? "Warning: Window focus lost!" : "Fullscreen required";
   const focusMessage = fullscreenActive
@@ -384,106 +378,156 @@ export default function Exam() {
       )}
 
       <div className="exam-container">
-      {/* Header with timer */}
-      <div className="exam-header">
-        <div className="exam-info">
-          <h2>{paper.paperType} - {paper.trade.name}</h2>
-          <div className={`timer ${timeRemaining <= 300 ? "timer-warning" : ""}`}>
-            <span className="timer-label">Time Remaining:</span>
-            <span className="timer-value">{formatTime(timeRemaining)}</span>
-          </div>
-        </div>
-        <div className="exam-stats">
-          <span>Answered: {answeredCount} / {totalQuestions}</span>
-        </div>
-      </div>
-
-      <div className="exam-body">
-        {/* Question Panel */}
-        <div className="question-panel">
-          <h3>Questions</h3>
-          <div className="question-grid">
-            {paper.questions.map((q, index) => {
-              const isAnswered = answers[q.id];
-              const isCurrent = index === currentQuestion;
-              return (
-                <button
-                  key={q.id}
-                  className={`question-btn ${isCurrent ? "current" : ""} ${isAnswered ? "answered" : ""}`}
-                  onClick={() => setCurrentQuestion(index)}
-                >
-                  {index + 1}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Question Area */}
-        <div className="question-area">
-          <div className="question-card">
-            <div className="question-header">
-              <h3>Question {currentQuestion + 1} of {totalQuestions}</h3>
-              <span className="question-marks">Marks: {currentQ.marks}</span>
+        <aside className="sidebar">
+          <div className="sidebar-header">
+            <h2>Question Navigator</h2>
+            <div className={`time-remaining${isTimeCritical ? " warning" : ""}`}>
+              <span className="label">Time Left:</span>
+              <span className="value">{formatTime(timeRemaining)}</span>
             </div>
+          </div>
 
-            <div className="question-text">
-              {currentQ.questionText}
-            </div>
-
-            <div className="options">
-              {["A", "B", "C", "D"].map(opt => {
-                const optionValue = currentQ[`option${opt}`];
-                if (!optionValue) return null;
-
+          <div className="question-nav-container">
+            <div className="question-nav">
+              {paper.questions.map((q, index) => {
+                const isAnswered = Boolean(answers[q.id]);
+                const isCurrent = index === currentQuestion;
+                const isFlagged = flaggedQuestions.has(q.id);
+                const classes = ["question-btn"];
+                if (isCurrent) classes.push("current");
+                if (isAnswered) classes.push("answered");
+                if (isFlagged) classes.push("flagged");
                 return (
-                  <label 
-                    key={opt} 
-                    className={`option-label ${answers[currentQ.id] === opt ? "selected" : ""}`}
+                  <button
+                    key={q.id}
+                    type="button"
+                    className={classes.join(" ")}
+                    onClick={() => setCurrentQuestion(index)}
                   >
-                    <input
-                      type="radio"
-                      name={`question-${currentQ.id}`}
-                      value={opt}
-                      checked={answers[currentQ.id] === opt}
-                      onChange={() => handleAnswerChange(currentQ.id, opt)}
-                    />
-                    <span className="option-letter">{opt}.</span>
-                    <span className="option-text">{optionValue}</span>
-                  </label>
+                    {index + 1}
+                  </button>
                 );
               })}
             </div>
+          </div>
 
-            <div className="question-navigation">
-              <button
-                className="nav-btn"
-                onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
-                disabled={currentQuestion === 0}
-              >
-                ← Previous
-              </button>
-              <button
-                className="nav-btn"
-                onClick={() => setCurrentQuestion(prev => Math.min(totalQuestions - 1, prev + 1))}
-                disabled={currentQuestion === totalQuestions - 1}
-              >
-                Next →
-              </button>
+          <div className="question-status">
+            <div className="status-item">
+              <span className="status-color status-current"></span>
+              Current Question
+            </div>
+            <div className="status-item">
+              <span className="status-color status-answered"></span>
+              Answered
+            </div>
+            <div className="status-item">
+              <span className="status-color status-flagged"></span>
+              Flagged
+            </div>
+            <div className="status-item">
+              <span className="status-color status-not-answered"></span>
+              Not Answered
             </div>
           </div>
+        </aside>
 
-          {/* Submit Button */}
-          <div className="submit-section">
-            <button className="submit-btn" onClick={handleSubmit}>
-              SUBMIT EXAM
+        <main className="main-content">
+          <header className="exam-header">
+            <div>
+              <h1 className="exam-title">
+                {paper.paperType}
+                {tradeName ? ` — ${tradeName}` : ""}
+              </h1>
+              <p className="exam-subtitle">
+                Question {currentQuestion + 1} of {totalQuestions}
+              </p>
+            </div>
+            <div className="exam-metrics">
+              <span>{answeredCount} / {totalQuestions} Answered</span>
+            </div>
+          </header>
+
+          <section className="question-card">
+            <div className="question-header">
+              <h2 className="question-text">Q{currentQuestion + 1}. {questionText}</h2>
+              {marksValue && <span className="marks-badge">{marksValue} Marks</span>}
+            </div>
+
+            <div className="options-container">
+              {hasObjectiveOptions ? (
+                optionEntries.map(({ key, value }) => {
+                  const inputId = `q${currentQ.id}-${key}`;
+                  return (
+                    <label key={key} className={`form-check ${answers[currentQ.id] === key ? "selected" : ""}`} htmlFor={inputId}>
+                      <input
+                        id={inputId}
+                        className="form-check-input"
+                        type="radio"
+                        name={`question-${currentQ.id}`}
+                        value={key}
+                        checked={answers[currentQ.id] === key}
+                        onChange={() => handleAnswerChange(currentQ.id, key)}
+                      />
+                      <span className="form-check-label">
+                        <span className="option-letter">{key}.</span>
+                        <span className="option-text">{value}</span>
+                      </span>
+                    </label>
+                  );
+                })
+              ) : (
+                <textarea
+                  className="form-control long-answer"
+                  value={answers[currentQ.id] || ""}
+                  placeholder="Type your answer here"
+                  onChange={(event) => handleAnswerChange(currentQ.id, event.target.value)}
+                />
+              )}
+            </div>
+
+            <div className="nav-controls">
+              <div className="nav-controls-left">
+                {currentQuestion > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
+                  >
+                    ← Previous
+                  </button>
+                )}
+              </div>
+              <div className="nav-controls-center">
+                <button
+                  type="button"
+                  className={`btn btn-flag${isCurrentFlagged ? " active" : ""}`}
+                  onClick={() => toggleFlagQuestion(currentQ.id)}
+                >
+                  {isCurrentFlagged ? "Unflag" : "Flag"}
+                </button>
+              </div>
+              <div className="nav-controls-right">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setCurrentQuestion(prev => Math.min(totalQuestions - 1, prev + 1))}
+                  disabled={currentQuestion === totalQuestions - 1}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="submit-footer">
+            <button type="button" className="btn btn-success" onClick={handleSubmit}>
+              Submit Exam
             </button>
-            <p className="submit-warning">
-              Once submitted, you cannot change your answers. Make sure you have reviewed all questions.
+            <p className="submit-hint">
+              Once submitted, you cannot make changes. Please ensure you have reviewed all questions.
             </p>
-          </div>
-        </div>
-      </div>
+          </section>
+        </main>
       </div>
     </>
   );

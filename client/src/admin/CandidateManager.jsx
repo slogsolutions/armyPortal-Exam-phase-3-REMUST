@@ -40,7 +40,6 @@ const defaultCreateForm = {
   commandId: "",
   centerId: "",
   selectedExamTypes: [],
-  slotIds: [], // Array to store assigned slot IDs
 };
 
 const formatDate = (value) => {
@@ -76,8 +75,6 @@ export default function CandidateManager() {
   const [filterTradeId, setFilterTradeId] = useState("");
   const [filterCommandId, setFilterCommandId] = useState("");
   const [filterCenterId, setFilterCenterId] = useState("");
-  const [slotOptions, setSlotOptions] = useState([]); // Available slots for assignment
-  const [bulkAssigning, setBulkAssigning] = useState(false); // For bulk assignment loading state
 
   const handleAdminAuthError = (error) => {
     if (error?.response?.status === 401 || error?.response?.status === 403) {
@@ -167,66 +164,6 @@ export default function CandidateManager() {
     }
   };
 
-  const loadSlotOptions = async (tradeId, commandId, centerId, selectedExamTypes = []) => {
-    if (!tradeId) {
-      setSlotOptions([]);
-      return;
-    }
-
-    console.log('Loading slots for candidate creation:', { tradeId, commandId, centerId, selectedExamTypes });
-
-    const params = new URLSearchParams({ tradeId: String(tradeId) });
-    
-    // Filter by command and center if provided
-    if (commandId) {
-      params.append("commandId", String(commandId));
-    }
-    if (centerId) {
-      params.append("centerId", String(centerId));
-    }
-    
-    params.append("upcoming", "false"); // Get all slots, not just upcoming
-
-    try {
-      const res = await api.get(`/exam-slot?${params.toString()}`);
-      const allSlots = res.data || [];
-      
-      console.log('All slots received for creation:', allSlots);
-      
-      // Filter slots by trade, command, and center
-      let filtered = allSlots.filter((slot) => {
-        // Must match trade
-        if (slot.tradeId !== Number(tradeId)) {
-          return false;
-        }
-        
-        // Must match command if provided
-        if (commandId && slot.commandId !== Number(commandId)) {
-          return false;
-        }
-        
-        // Must match center if provided
-        if (centerId && slot.centerId !== Number(centerId)) {
-          return false;
-        }
-        
-        return true;
-      });
-      
-      // Further filter by selected exam types if any are selected
-      if (selectedExamTypes.length > 0) {
-        filtered = filtered.filter((slot) => selectedExamTypes.includes(slot.paperType));
-      }
-      
-      console.log('Filtered slots for creation:', filtered);
-      setSlotOptions(filtered);
-    } catch (error) {
-      console.error("Failed to load exam slots for creation", error);
-      if (handleAdminAuthError(error)) return;
-      setSlotOptions([]);
-    }
-  };
-
   const handleCandidateClick = (candidate) => {
     navigate(`/admin/candidate-profile/${candidate.id}`);
   };
@@ -241,82 +178,36 @@ export default function CandidateManager() {
   const handleExamTypeToggle = (value) => {
     setCreateForm((prev) => {
       const exists = prev.selectedExamTypes.includes(value);
-      const nextTypes = exists
-        ? prev.selectedExamTypes.filter((item) => item !== value)
-        : [...prev.selectedExamTypes, value];
-      
-      // Clear slot assignments when exam types change
-      const filteredSlotIds = prev.slotIds.filter((id) => {
-        const slot = slotOptions.find((option) => option.id === id);
-        return slot ? nextTypes.includes(slot.paperType) : false;
-      });
-      
-      // Reload slots with new exam types
-      if (prev.tradeId) {
-        loadSlotOptions(prev.tradeId, prev.commandId, prev.centerId, nextTypes);
-      }
-      
       return {
         ...prev,
-        selectedExamTypes: nextTypes,
-        slotIds: filteredSlotIds,
+        selectedExamTypes: exists
+          ? prev.selectedExamTypes.filter((item) => item !== value)
+          : [...prev.selectedExamTypes, value],
       };
     });
   };
 
   const handleTradeChange = (value) => {
-    setCreateForm((prev) => {
-      const newForm = {
-        ...prev,
-        tradeId: value,
-        selectedExamTypes: [], // Reset exam types when trade changes
-        slotIds: [], // Clear slot assignments
-      };
-      
-      // Load slots for new trade (will be empty initially since no exam types selected)
-      if (value) {
-        loadSlotOptions(value, prev.commandId, prev.centerId, []);
-      } else {
-        setSlotOptions([]);
-      }
-      
-      return newForm;
-    });
+    setCreateForm((prev) => ({
+      ...prev,
+      tradeId: value,
+      selectedExamTypes: [], // Reset exam types when trade changes
+    }));
   };
 
   const handleCommandChange = (value) => {
-    setCreateForm((prev) => {
-      const newForm = {
-        ...prev,
-        commandId: value,
-        centerId: "", // Reset center when command changes
-        slotIds: [], // Clear slot assignments when command changes
-      };
-      
-      // Reload slots with new command
-      if (prev.tradeId) {
-        loadSlotOptions(prev.tradeId, value, "", prev.selectedExamTypes);
-      }
-      
-      return newForm;
-    });
+    setCreateForm((prev) => ({
+      ...prev,
+      commandId: value,
+      centerId: "", // Reset center when command changes
+    }));
   };
 
   const handleCenterChange = (value) => {
-    setCreateForm((prev) => {
-      const newForm = {
-        ...prev,
-        centerId: value,
-        slotIds: [], // Clear slot assignments when center changes
-      };
-      
-      // Reload slots with new center
-      if (prev.tradeId) {
-        loadSlotOptions(prev.tradeId, prev.commandId, value, prev.selectedExamTypes);
-      }
-      
-      return newForm;
-    });
+    setCreateForm((prev) => ({
+      ...prev,
+      centerId: value,
+    }));
   };
 
   const allowedExamTypesForCreate = useMemo(() => {
@@ -365,11 +256,9 @@ export default function CandidateManager() {
         commandId: Number(createForm.commandId),
         centerId: createForm.centerId ? Number(createForm.centerId) : null,
         selectedExamTypes: createForm.selectedExamTypes,
-        slotIds: createForm.slotIds, // Include slot assignments
       });
 
       setCreateForm(defaultCreateForm);
-      setSlotOptions([]); // Clear slot options
       setCreateOpen(false);
       await loadCandidates();
       alert("Candidate created successfully");
@@ -389,25 +278,6 @@ export default function CandidateManager() {
     setSearchTerm("");
   };
 
-  const handleBulkAssignSlots = async () => {
-    if (!confirm("This will automatically assign all unassigned candidates to available slots. Continue?")) {
-      return;
-    }
-
-    setBulkAssigning(true);
-    try {
-      const res = await api.post("/candidate/bulk-assign-slots");
-      alert(`Success! Assigned ${res.data.totalAssigned} candidates to slots.`);
-      await loadCandidates(); // Refresh the candidate list
-    } catch (error) {
-      console.error("Failed to bulk assign slots", error);
-      if (handleAdminAuthError(error)) return;
-      alert(error.response?.data?.error || "Failed to bulk assign slots");
-    } finally {
-      setBulkAssigning(false);
-    }
-  };
-
   return (
     <div className="candidate-manager-new">
       <div className="header-section">
@@ -416,18 +286,9 @@ export default function CandidateManager() {
         </div>
         <div className="header-content">
           <h1>Candidate profiles</h1>
-          <div className="header-buttons">
-            <button 
-              className="bulk-assign-btn" 
-              onClick={handleBulkAssignSlots}
-              disabled={bulkAssigning}
-            >
-              {bulkAssigning ? "Assigning..." : "🔄 Auto-Assign Slots"}
-            </button>
-            <button className="add-candidate-btn" onClick={() => setCreateOpen(true)}>
-              Add candidate profile
-            </button>
-          </div>
+          <button className="add-candidate-btn" onClick={() => setCreateOpen(true)}>
+            Add candidate profile
+          </button>
         </div>
       </div>
 
@@ -662,90 +523,6 @@ export default function CandidateManager() {
                   </div>
                 )}
               </section>
-
-              {/* Slot Assignment Section */}
-              {createForm.selectedExamTypes.length > 0 && (
-                <section className="slot-assignments">
-                  <h3>📅 Assign Exam Slots</h3>
-                  <div className="slot-info">
-                    <p className="muted">
-                      🔒 Only slots matching the selected trade, command, and center are shown.
-                    </p>
-                    <div className="slot-stats">
-                      <span>Available Slots: {slotOptions.length}</span>
-                      <span>Assigned: {createForm.slotIds.length} of {createForm.selectedExamTypes.length}</span>
-                    </div>
-                  </div>
-                  
-                  {createForm.selectedExamTypes.map((examType) => {
-                    const slotsForType = slotOptions.filter(slot => slot.paperType === examType);
-                    const assignedSlotId = createForm.slotIds.find(slotId => {
-                      const slot = slotOptions.find(s => s.id === slotId);
-                      return slot && slot.paperType === examType;
-                    });
-                    
-                    return (
-                      <div key={examType} className="slot-assignment-row">
-                        <label className="slot-label">
-                          <span className="exam-type-badge">{examType}</span>
-                          Slot Assignment
-                        </label>
-                        {slotsForType.length === 0 ? (
-                          <div className="no-slots-message">
-                            <span className="warning-icon">⚠️</span>
-                            <div>
-                              <p><strong>No {examType} slots available</strong></p>
-                              <p>Create slots for this trade/command/center combination.</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="slot-selection">
-                            <select 
-                              value={assignedSlotId || ""} 
-                              onChange={(e) => {
-                                const newSlotId = e.target.value ? Number(e.target.value) : null;
-                                setCreateForm(prev => {
-                                  // Remove any existing slot for this exam type
-                                  const filteredSlotIds = prev.slotIds.filter(slotId => {
-                                    const slot = slotOptions.find(s => s.id === slotId);
-                                    return slot && slot.paperType !== examType;
-                                  });
-                                  
-                                  // Add new slot if selected
-                                  const newSlotIds = newSlotId 
-                                    ? [...filteredSlotIds, newSlotId]
-                                    : filteredSlotIds;
-                                  
-                                  return {
-                                    ...prev,
-                                    slotIds: newSlotIds
-                                  };
-                                });
-                              }}
-                              className="slot-select"
-                            >
-                              <option value="">🔽 Select {examType} Slot</option>
-                              {slotsForType.map((slot) => (
-                                <option key={slot.id} value={slot.id}>
-                                  📅 {formatDateTime(slot.startTime)} - {formatDateTime(slot.endTime)} 
-                                  🏢 ({slot.center?.name}) - 👥 {slot.currentCount || 0} assigned
-                                </option>
-                              ))}
-                            </select>
-                            <div className="slot-status">
-                              {assignedSlotId ? (
-                                <span className="assigned">✅ Assigned</span>
-                              ) : (
-                                <span className="unassigned">⏳ Not Assigned</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </section>
-              )}
 
               {createError && <div className="error-message">{createError}</div>}
 

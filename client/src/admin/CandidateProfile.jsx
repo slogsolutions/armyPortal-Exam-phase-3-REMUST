@@ -3,6 +3,18 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/api";
 import "./CandidateProfile.css";
 
+const EXAM_DISPLAY_NAMES = {
+  "WP-I": "WP-I",
+  "WP-II": "WP-II", 
+  "WP-III": "WP-III",
+  "PR-I": "PR-I",
+  "PR-II": "PR-II",
+  "PR-III": "PR-III",
+  "PR-IV": "PR-IV",
+  "PR-V": "PR-V",
+  ORAL: "ORAL",
+};
+
 const TRADE_EXAM_FLAGS = [
   { flag: "wp1", label: "WP-I" },
   { flag: "wp2", label: "WP-II" },
@@ -17,42 +29,44 @@ const TRADE_EXAM_FLAGS = [
 
 const formatDate = (value) => {
   if (!value) return "";
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().split("T")[0];
 };
 
-const tradeExamTypes = (trade) =>
-  trade
-    ? TRADE_EXAM_FLAGS.filter(({ flag }) => trade[flag]).map(({ label }) => label)
-    : [];
+const formatDateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString();
+};
+
+const tradeExamTypes = (trade) => {
+  if (!trade) return [];
+  return TRADE_EXAM_FLAGS.filter(({ flag }) => trade[flag]).map(({ label }) => label);
+};
 
 export default function CandidateProfile() {
-  const { candidateId } = useParams();
   const navigate = useNavigate();
-
-  const [masters, setMasters] = useState({
-    ranks: [],
-    trades: [],
-    commands: [],
-    centers: [],
-  });
-
+  const { candidateId } = useParams();
+  const [masters, setMasters] = useState({ ranks: [], trades: [], commands: [], centers: [] });
   const [candidateDetail, setCandidateDetail] = useState(null);
-  const [editForm, setEditForm] = useState({});
   const [loading, setLoading] = useState(true);
+  const [editForm, setEditForm] = useState({});
+  const [slotOptions, setSlotOptions] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
-  /* ---------------- AUTH ---------------- */
-  const handleAuthError = (err) => {
-    if ([401, 403].includes(err?.response?.status)) {
-      alert("Session expired. Login again.");
+  const handleAdminAuthError = (error) => {
+    if (error?.response?.status === 401 || error?.response?.status === 403) {
+      alert("Admin session expired. Please login again.");
       navigate("/admin/login", { replace: true });
       return true;
     }
     return false;
   };
 
-  /* ---------------- LOAD DATA ---------------- */
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
     if (!token) {
@@ -60,8 +74,21 @@ export default function CandidateProfile() {
       return;
     }
     loadMasters();
-    loadCandidate();
-  }, [candidateId]);
+    if (candidateId) {
+      fetchCandidateDetail(candidateId);
+    }
+  }, [navigate, candidateId]);
+
+  const centersByCommand = useMemo(() => {
+    const map = new Map();
+    masters.centers.forEach((center) => {
+      if (!map.has(center.commandId)) {
+        map.set(center.commandId, []);
+      }
+      map.get(center.commandId).push(center);
+    });
+    return map;
+  }, [masters.centers]);
 
   const loadMasters = async () => {
     try {
@@ -72,191 +99,567 @@ export default function CandidateProfile() {
         commands: res.data?.commands || [],
         centers: res.data?.centers || [],
       });
-    } catch (e) {
-      if (handleAuthError(e)) return;
+    } catch (error) {
+      console.error("Failed to load masters", error);
+      if (handleAdminAuthError(error)) return;
     }
   };
 
-  const loadCandidate = async () => {
+  const fetchCandidateDetail = async (candidateId) => {
+    setLoading(true);
     try {
       const res = await api.get(`/candidate/${candidateId}`);
-      const c = res.data;
-
-      setCandidateDetail(c);
+      const candidateData = res.data;
+      
+      console.log('Candidate data received:', candidateData);
+      
+      // Parse selectedExamTypes - it comes as an array from the backend
+      const selectedExamTypes = Array.isArray(candidateData.selectedExamTypes) 
+        ? candidateData.selectedExamTypes 
+        : [];
+      
+      console.log('Parsed selectedExamTypes:', selectedExamTypes);
+      
+      setCandidateDetail(candidateData);
       setEditForm({
-        id: c.id,
-        armyNo: c.armyNo || "",
-        name: c.name || "",
-        unit: c.unit || "",
-        medCat: c.medCat || "",
-        dob: formatDate(c.dob),
-        doe: formatDate(c.doe),
-        rankId: String(c.rankId || ""),
-        tradeId: String(c.tradeId || ""),
-        commandId: String(c.commandId || ""),
-        centerId: String(c.centerId || ""),
-        selectedExamTypes: c.selectedExamTypes || [],
-        slotIds: (c.examSlots || []).map((s) => s.id),
+        id: candidateData.id,
+        armyNo: candidateData.armyNo || "",
+        name: candidateData.name || "",
+        unit: candidateData.unit || "",
+        medCat: candidateData.medCat || "",
+        corps: candidateData.corps || "",
+        dob: formatDate(candidateData.dob),
+        doe: formatDate(candidateData.doe),
+        rankId: candidateData.rankId ? String(candidateData.rankId) : "",
+        tradeId: candidateData.tradeId ? String(candidateData.tradeId) : "",
+        commandId: candidateData.commandId ? String(candidateData.commandId) : "",
+        centerId: candidateData.centerId ? String(candidateData.centerId) : "",
+        selectedExamTypes: selectedExamTypes,
+        slotIds: (candidateData.examSlots || []).map((slot) => slot.id),
       });
-    } catch (e) {
-      if (handleAuthError(e)) return;
+      
+      // Load slots with the parsed exam types
+      await loadSlotOptions(candidateData.tradeId, candidateData.commandId, candidateData.centerId, selectedExamTypes);
+    } catch (error) {
+      console.error("Failed to load candidate", error);
+      if (handleAdminAuthError(error)) return;
     } finally {
       setLoading(false);
     }
   };
 
-  /* ---------------- HELPERS ---------------- */
-  const allowedExamTypes = useMemo(() => {
-    const trade = masters.trades.find(
-      (t) => String(t.id) === String(editForm.tradeId)
-    );
-    return tradeExamTypes(trade);
-  }, [masters.trades, editForm.tradeId]);
+  const loadSlotOptions = async (tradeId, commandId, centerId, selectedExamTypes = []) => {
+    if (!tradeId) {
+      setSlotOptions([]);
+      return;
+    }
 
-  const handleChange = (field, value) => {
-    setEditForm((p) => ({ ...p, [field]: value }));
+    console.log('Loading slots for:', { tradeId, commandId, centerId, selectedExamTypes });
+
+    const params = new URLSearchParams({ tradeId: String(tradeId) });
+    if (commandId) params.append("commandId", String(commandId));
+    if (centerId) params.append("centerId", String(centerId));
+    params.append("upcoming", "false"); // Get all slots, not just upcoming
+
+    try {
+      const res = await api.get(`/exam-slot?${params.toString()}`);
+      const allSlots = res.data || [];
+      
+      console.log('All slots received:', allSlots);
+      
+      // Filter slots based on selected exam types
+      // Only show slots for paper types that the candidate has selected
+      const filtered = selectedExamTypes.length > 0
+        ? allSlots.filter((slot) => selectedExamTypes.includes(slot.paperType))
+        : allSlots;
+      
+      console.log('Filtered slots:', filtered);
+      setSlotOptions(filtered);
+    } catch (error) {
+      console.error("Failed to load exam slots", error);
+      if (handleAdminAuthError(error)) return;
+      setSlotOptions([]);
+    }
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleExamTypeToggle = (value) => {
+    setEditForm((prev) => {
+      const exists = prev.selectedExamTypes.includes(value);
+      const nextTypes = exists
+        ? prev.selectedExamTypes.filter((item) => item !== value)
+        : [...prev.selectedExamTypes, value];
+      
+      console.log('Exam types changed to:', nextTypes);
+      
+      // Reload slots with new exam types
+      loadSlotOptions(prev.tradeId, prev.commandId, prev.centerId, nextTypes);
+      
+      return {
+        ...prev,
+        selectedExamTypes: nextTypes,
+        // Clear slot assignments when exam types change
+        slotIds: prev.slotIds.filter((id) => {
+          const slot = slotOptions.find((option) => option.id === id);
+          return slot ? nextTypes.includes(slot.paperType) : false;
+        }),
+      };
+    });
+  };
+
+  const handleSlotToggle = (slotId) => {
+    setEditForm((prev) => {
+      const exists = prev.slotIds.includes(slotId);
+      return {
+        ...prev,
+        slotIds: exists ? prev.slotIds.filter((id) => id !== slotId) : [...prev.slotIds, slotId],
+      };
+    });
+  };
+
+  const handleTradeChange = (value) => {
+    setEditForm((prev) => {
+      const newForm = {
+        ...prev,
+        tradeId: value,
+        selectedExamTypes: [], // Reset exam types when trade changes
+        slotIds: [], // Clear slot assignments
+      };
+      
+      // Load slots for new trade (will be empty initially since no exam types selected)
+      loadSlotOptions(value, prev.commandId, prev.centerId, []);
+      
+      return newForm;
+    });
+  };
+
+  const handleCommandChange = (value) => {
+    setEditForm((prev) => {
+      const newForm = {
+        ...prev,
+        commandId: value,
+        centerId: "", // Reset center when command changes
+        slotIds: [], // Clear slot assignments
+      };
+      
+      // Reload slots for new command
+      loadSlotOptions(prev.tradeId, value, "", prev.selectedExamTypes);
+      
+      return newForm;
+    });
+  };
+
+  const handleCenterChange = (value) => {
+    setEditForm((prev) => {
+      const newForm = {
+        ...prev,
+        centerId: value,
+        slotIds: [], // Clear slot assignments when center changes
+      };
+      
+      // Reload slots for new center
+      loadSlotOptions(prev.tradeId, prev.commandId, value, prev.selectedExamTypes);
+      
+      return newForm;
+    });
   };
 
   const handleSave = async () => {
+    if (!editForm.id) return;
     setSaving(true);
+    setSaveMessage("");
     try {
-      await api.put(`/candidate/${editForm.id}`, {
-        name: editForm.name,
-        unit: editForm.unit,
-        medCat: editForm.medCat,
+      const payload = {
+        name: editForm.name.trim(),
+        unit: editForm.unit.trim(),
+        medCat: editForm.medCat.trim(),
+        corps: editForm.corps.trim(),
         dob: editForm.dob,
         doe: editForm.doe,
-        rankId: Number(editForm.rankId),
-        tradeId: Number(editForm.tradeId),
-        commandId: Number(editForm.commandId),
+        rankId: editForm.rankId ? Number(editForm.rankId) : undefined,
+        tradeId: editForm.tradeId ? Number(editForm.tradeId) : undefined,
+        commandId: editForm.commandId ? Number(editForm.commandId) : undefined,
         centerId: editForm.centerId ? Number(editForm.centerId) : null,
         selectedExamTypes: editForm.selectedExamTypes,
-        slotIds: editForm.slotIds,
-      });
-      alert("Candidate updated");
-    } catch (e) {
-      if (handleAuthError(e)) return;
-      alert("Update failed");
+        slotIds: editForm.slotIds
+      };
+
+      const res = await api.put(`/candidate/${editForm.id}`, payload);
+      setCandidateDetail(res.data.candidate);
+      setSaveMessage("Candidate updated successfully");
+    } catch (error) {
+      console.error("Failed to update candidate", error);
+      if (handleAdminAuthError(error)) return;
+      setSaveMessage(error.response?.data?.error || "Failed to update candidate");
     } finally {
       setSaving(false);
     }
   };
 
-  /* ---------------- UI ---------------- */
+  const handleDelete = async () => {
+    if (!editForm.id) return;
+    if (!confirm("Are you sure you want to delete this candidate? This action cannot be undone.")) {
+      return;
+    }
+    
+    setDeleteBusy(true);
+    try {
+      await api.delete(`/candidate/${editForm.id}`);
+      alert("Candidate deleted successfully");
+      navigate("/admin/candidates");
+    } catch (error) {
+      console.error("Failed to delete candidate", error);
+      if (handleAdminAuthError(error)) return;
+      alert(error.response?.data?.error || "Failed to delete candidate");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const allowedExamTypesForEdit = useMemo(() => {
+    const trade = masters.trades.find((item) => String(item.id) === String(editForm.tradeId));
+    return tradeExamTypes(trade);
+  }, [masters.trades, editForm.tradeId]);
+
+  const centersForEdit = useMemo(() => {
+    if (!editForm.commandId) return [];
+    return centersByCommand.get(Number(editForm.commandId)) || [];
+  }, [centersByCommand, editForm.commandId]);
+
+  const attemptSummary = useMemo(() => {
+    return candidateDetail?.examAttempts || [];
+  }, [candidateDetail]);
+
   if (loading) {
-    return <div className="candidate-profile-loading">Loading…</div>;
+    return (
+      <div className="candidate-profile-loading">
+        <div className="loading-spinner">Loading candidate profile...</div>
+      </div>
+    );
   }
 
   if (!candidateDetail) {
-    return <div>Candidate not found</div>;
+    return (
+      <div className="candidate-profile-error">
+        <div className="error-message">Candidate not found</div>
+        <button onClick={() => navigate("/admin/candidates")}>
+          Back to Candidate List
+        </button>
+      </div>
+    );
   }
 
   return (
     <div className="candidate-profile-page">
       <div className="profile-header">
         <div className="breadcrumb">
-          <span onClick={() => navigate("/admin")}>Home</span> •
-          <span onClick={() => navigate("/admin/candidates")}>
-            Candidates
-          </span>{" "}
-          • <span>{editForm.armyNo}</span>
+          <span onClick={() => navigate("/admin")}>Home</span> • 
+          <span>Registration</span> • 
+          <span onClick={() => navigate("/admin/candidates")}>Candidate profiles</span> • 
+          <span>{editForm.armyNo} - {editForm.name}</span>
         </div>
-        <h1>Candidate Profile</h1>
+        <h1>Candidate profiles</h1>
       </div>
 
       <div className="profile-content">
         <div className="profile-form-section">
           <div className="form-grid">
-            {/* Army No */}
             <div className="form-row">
-              <label>Army No</label>
-              <input value={editForm.armyNo} disabled />
+              <label>User</label>
+              <div className="input-with-icons">
+                <input 
+                  type="text" 
+                  value={editForm.unit || ""} 
+                  onChange={(e) => handleEditChange("unit", e.target.value)}
+                />
+                <div className="input-icons">
+                  <span className="icon edit">✏️</span>
+                  <span className="icon add">➕</span>
+                  <span className="icon remove">➖</span>
+                </div>
+              </div>
             </div>
-
-            {/* Name */}
+            
             <div className="form-row">
-              <label>Name</label>
-              <input
-                value={editForm.name}
-                onChange={(e) => handleChange("name", e.target.value)}
+              <label>Army no</label>
+              <input 
+                type="text" 
+                value={editForm.armyNo || ""} 
+                disabled
+                className="disabled-input"
               />
             </div>
 
-            {/* Rank */}
             <div className="form-row">
               <label>Rank</label>
-              <select
-                value={editForm.rankId}
-                onChange={(e) => handleChange("rankId", e.target.value)}
+              <select 
+                value={editForm.rankId || ""} 
+                onChange={(e) => handleEditChange("rankId", e.target.value)}
               >
-                <option value="">Select</option>
-                {masters.ranks.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
+                <option value="">Select Rank</option>
+                {masters.ranks.map((rank) => (
+                  <option key={rank.id} value={rank.id}>
+                    {rank.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Trade */}
-            <div className="form-row">
-              <label>Trade</label>
-              <select
-                value={editForm.tradeId}
-                onChange={(e) => handleChange("tradeId", e.target.value)}
-              >
-                <option value="">Select</option>
-                {masters.trades.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* <div className="form-row">
+              <label>Trade type</label>
+              <input 
+                type="text" 
+                value={masters.trades.find(t => String(t.id) === String(editForm.tradeId))?.name || ""} 
+                disabled
+                className="disabled-input"
+              />
+            </div> */}
 
-            {/* Unit */}
             <div className="form-row">
               <label>Unit</label>
-              <input
-                value={editForm.unit}
-                onChange={(e) => handleChange("unit", e.target.value)}
+              <input 
+                type="text" 
+                value={editForm.unit || ""} 
+                onChange={(e) => handleEditChange("unit", e.target.value)}
               />
             </div>
 
-            {/* Med Cat */}
             <div className="form-row">
-              <label>Med Cat</label>
-              <input
-                value={editForm.medCat}
-                onChange={(e) => handleChange("medCat", e.target.value)}
+              <label>Command</label>
+              <div className="input-with-icons">
+                <input 
+                  type="text" 
+                  value={masters.commands.find(c => String(c.id) === String(editForm.commandId))?.name || ""} 
+                  disabled
+                  className="disabled-input"
+                />
+                <div className="input-icons">
+                  <span className="icon edit">✏️</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <label>Trade</label>
+              <select 
+                value={editForm.tradeId || ""} 
+                onChange={(e) => handleTradeChange(e.target.value)}
+              >
+                <option value="">Select Trade</option>
+                {masters.trades.map((trade) => (
+                  <option key={trade.id} value={trade.id}>
+                    {trade.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <label>Name</label>
+              <div className="input-with-icons">
+                <input 
+                  type="text" 
+                  value={editForm.name || ""} 
+                  onChange={(e) => handleEditChange("name", e.target.value)}
+                />
+                <div className="input-icons">
+                  <span className="icon star">⭐</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <label>Date of Birth</label>
+              <input 
+                type="date" 
+                value={editForm.dob || ""} 
+                onChange={(e) => handleEditChange("dob", e.target.value)}
               />
             </div>
 
-            {/* DOB */}
             <div className="form-row">
-              <label>DOB</label>
-              <input
-                type="date"
-                value={editForm.dob}
-                onChange={(e) => handleChange("dob", e.target.value)}
+              <label>Date of Enrolment</label>
+              <input 
+                type="date" 
+                value={editForm.doe || ""} 
+                onChange={(e) => handleEditChange("doe", e.target.value)}
               />
             </div>
 
-            {/* DOE */}
             <div className="form-row">
-              <label>DOE</label>
-              <input
-                type="date"
-                value={editForm.doe}
-                onChange={(e) => handleChange("doe", e.target.value)}
+              <label>Med cat</label>
+              <input 
+                type="text" 
+                value={editForm.medCat || ""} 
+                onChange={(e) => handleEditChange("medCat", e.target.value)}
               />
+            </div>
+
+            {/* <div className="form-row">
+              <label>Cat</label>
+              <input 
+                type="text" 
+                value={editForm.corps || ""} 
+                onChange={(e) => handleEditChange("corps", e.target.value)}
+              />
+            </div> */}
+
+            <div className="form-row">
+              <label>Exam center</label>
+              <input 
+                type="text" 
+                value={masters.centers.find(c => String(c.id) === String(editForm.centerId))?.name || ""} 
+                onChange={(e) => handleEditChange("examCenter", e.target.value)}
+              />
+            </div>
+
+            <div className="form-row">
+              <label>Shift</label>
+              <div className="input-with-icons">
+                <select>
+                  <option value="">Select Shift</option>
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="evening">Evening</option>
+                </select>
+                <div className="input-icons">
+                  <span className="icon edit">✏️</span>
+                  <span className="icon add">➕</span>
+                  <span className="icon remove">➖</span>
+                  <span className="icon star">⭐</span>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="form-actions">
-            <button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : "Save Changes"}
+        <div className="profile-actions-section">
+          <div className="action-buttons">
+            <button className="save-btn" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving..." : "Save"}
             </button>
+            <button className="delete-btn" onClick={handleDelete} disabled={deleteBusy}>
+              {deleteBusy ? "Deleting..." : "Delete"}
+            </button>
+            <button className="save-continue-btn">Save and add another</button>
+            <button className="save-edit-btn">Save and continue editing</button>
+            <button className="history-btn">History</button>
+          </div>
+
+          {saveMessage && (
+            <div className="save-message">{saveMessage}</div>
+          )}
+
+          {/* Exam Types Section */}
+          <div className="exam-types-section">
+            <h3>Exam Types</h3>
+            {allowedExamTypesForEdit.length === 0 ? (
+              <p>Selected trade does not have configured exam types.</p>
+            ) : (
+              <div className="exam-types-grid">
+                {allowedExamTypesForEdit.map((type) => (
+                  <label key={type} className={`exam-type-pill ${editForm.selectedExamTypes?.includes(type) ? "active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={editForm.selectedExamTypes?.includes(type) || false}
+                      onChange={() => handleExamTypeToggle(type)}
+                    />
+                    {EXAM_DISPLAY_NAMES[type]}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Exam Slots Section */}
+          <div className="exam-slots-section">
+            <h3>Exam Slots</h3>
+            {editForm.selectedExamTypes?.length === 0 ? (
+              <p>Please select exam types first to see available slots.</p>
+            ) : slotOptions.length === 0 ? (
+              <p>No slots available for the selected trade and exam types.</p>
+            ) : (
+              <div className="slots-grid">
+                {slotOptions.map((slot) => {
+                  const active = editForm.slotIds?.includes(slot.id);
+                  return (
+                    <button
+                      key={slot.id}
+                      type="button"
+                      className={`slot-card ${active ? "active" : ""}`}
+                      onClick={() => handleSlotToggle(slot.id)}
+                    >
+                      <span className="slot-paper">{slot.paperType}</span>
+                      <span className="slot-time">
+                        {formatDateTime(slot.startTime)} - {formatDateTime(slot.endTime)}
+                      </span>
+                      <span className="slot-locale">{slot.center?.name || "Center"}</span>
+                      <span className="slot-count">{slot.currentCount || 0} assigned · {slot.questionCount || 0} qns</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            
+            {/* Show currently assigned slots */}
+            {editForm.slotIds?.length > 0 && (
+              <div className="assigned-slots">
+                <h4>Currently Assigned Slots:</h4>
+                <ul>
+                  {editForm.slotIds.map(slotId => {
+                    const slot = slotOptions.find(s => s.id === slotId);
+                    return slot ? (
+                      <li key={slotId}>
+                        <strong>{slot.paperType}</strong> - {formatDateTime(slot.startTime)} at {slot.center?.name}
+                      </li>
+                    ) : (
+                      <li key={slotId}>Slot ID {slotId} (details not available)</li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Exam Attempts Section */}
+          <div className="exam-attempts-section">
+            <h3>Exam Attempts</h3>
+            {attemptSummary.length === 0 ? (
+              <p>No exam attempts recorded.</p>
+            ) : (
+              <table className="attempts-table">
+                <thead>
+                  <tr>
+                    <th>Paper</th>
+                    <th>Status</th>
+                    <th>Score</th>
+                    <th>Percentage</th>
+                    <th>Submitted</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attemptSummary.map((attempt) => (
+                    <tr key={attempt.id}>
+                      <td>{attempt.examPaper?.paperType || "—"}</td>
+                      <td>{attempt.status}</td>
+                      <td>{attempt.score ?? "—"}</td>
+                      <td>
+                        {typeof attempt.percentage === "number"
+                          ? `${attempt.percentage.toFixed(2)}%`
+                          : "—"}
+                      </td>
+                      <td>{formatDateTime(attempt.submittedAt) || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

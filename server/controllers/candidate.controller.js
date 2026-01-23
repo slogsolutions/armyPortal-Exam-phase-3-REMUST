@@ -145,6 +145,48 @@ const parseDateInput = (value) => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
+const normalizeDateForComparison = (value) => {
+  if (!value) return null;
+
+  const ensureISO = (date) => (date ? date.toISOString().split("T")[0] : null);
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : ensureISO(value);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const normalized = trimmed.replace(/\//g, "-");
+    const dashFormatMatch = /^([0-3]?\d)-([0-1]?\d)-(\d{4})$/.exec(normalized);
+
+    if (dashFormatMatch) {
+      const [, dayStr, monthStr, yearStr] = dashFormatMatch;
+      const day = Number(dayStr);
+      const month = Number(monthStr);
+      const year = Number(yearStr);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const utcDate = new Date(Date.UTC(year, month - 1, day));
+        if (
+          utcDate.getUTCFullYear() === year &&
+          utcDate.getUTCMonth() === month - 1 &&
+          utcDate.getUTCDate() === day
+        ) {
+          return ensureISO(utcDate);
+        }
+      }
+      return null;
+    }
+
+    const directDate = new Date(normalized);
+    return Number.isNaN(directDate.getTime()) ? null : ensureISO(directDate);
+  }
+
+  const fallback = new Date(value);
+  return Number.isNaN(fallback.getTime()) ? null : ensureISO(fallback);
+};
+
 const getOrderedWrittenTypes = (selectedTypes = []) =>
   WRITTEN_SEQUENCE.filter((type) => selectedTypes.includes(type));
 
@@ -544,10 +586,10 @@ exports.login = async (req, res) => {
     }
 
     // Verify date of birth (convert to YYYY-MM-DD format for comparison)
-    const candidateDob = new Date(candidate.dob).toISOString().split('T')[0];
-    const providedDob = new Date(dob).toISOString().split('T')[0];
+    const candidateDob = normalizeDateForComparison(candidate.dob);
+    const providedDob = normalizeDateForComparison(dob);
 
-    if (candidateDob !== providedDob) {
+    if (!candidateDob || !providedDob || candidateDob !== providedDob) {
       console.log('❌ Date mismatch for:', armyNo);
       return res.status(401).json({
         success: false,

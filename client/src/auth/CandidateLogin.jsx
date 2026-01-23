@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
+import armyBg from "../../img/army.jpg";
+import shieldImg from "../../img/shield.jpg";
 import "./CandidateLogin.css";
 
 export default function CandidateLogin() {
@@ -100,91 +102,121 @@ export default function CandidateLogin() {
 
       navigate(`/candidate/instructions?${params.toString()}`);
     } catch (err) {
-      setError(
-        err.response?.data?.error ||
-        "Invalid army number or date of birth"
-      );
+      const apiError = err.response?.data?.error;
+      if (apiError) {
+        if (/no active exam slot/i.test(apiError)) {
+          setError("Exam slot not available for your trade/paper. Please contact the exam cell.");
+        } else {
+          setError(apiError);
+        }
+      } else {
+        setError("Invalid army number or date of birth");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="candidate-login-page">
-      <div className="overlay"></div>
+    <div
+      className="candidate-login-page"
+      style={{ backgroundImage: `url(${armyBg})` }}
+    >
+      <div className="background-overlay" />
 
-      <div className="login-card">
-        <h1>CANDIDATE LOGIN</h1>
-        <h3>2 Signal Training Centre</h3>
+      <div className="navbar">
+        <div className="navbar-left">2 SIGNAL TRAINING CENTER EXAM PORTAL</div>
+        <div className="navbar-right">
+          <a href="/admin" className="btn-warning">OIC Exam Center</a>
+          <a href="/candidate/register" className="btn-success">Registration</a>
+        </div>
+      </div>
 
-        <form onSubmit={login}>
-          <div className="form-group">
-            <label>Army Number</label>
-            <input
-              type="text"
-              name="armyNo"
-              value={form.armyNo}
-              onChange={handleChange}
-              required
-              autoComplete="armyNo"
-              disabled={loading}
-            />
+      <div className="login-content">
+        <div className="login-container">
+          <div className="logo-badge">
+            <img src={shieldImg} alt="Army Shield" />
           </div>
+          <h2>Candidate Login</h2>
+          <p>Serve with courage. Access your exam portal account.</p>
 
-          <div className="form-group">
-            <label>Date of Birth</label>
-            <input
-              type="date"
-              name="dob"
-              value={form.dob}
-              onChange={handleChange}
-              required
-              autoComplete="dob"
-              disabled={loading}
-            />
-          </div>
-
-          {paperOptions.length > 0 && (
+          <form onSubmit={login}>
             <div className="form-group">
-              <label>Paper Type</label>
-              <select
-                name="paperType"
-                value={selectedPaper}
-                onChange={(e) => setSelectedPaper(e.target.value)}
+              <input
+                type="text"
+                name="armyNo"
+                value={form.armyNo}
+                onChange={handleChange}
+                required
+                placeholder="Army Number"
+                autoComplete="username"
                 disabled={loading}
-              >
-                <option value="">Select paper</option>
-                {paperOptions.map((paper) => (
-                  <option key={paper} value={paper}>
-                    {paper}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
-          )}
 
-          {candidateMeta && (
-            <div className="candidate-peek">
-              <p><strong>Name:</strong> {candidateMeta.name}</p>
-              <p><strong>Trade:</strong> {candidateMeta.trade?.name || candidateMeta.trade?.name}</p>
-              <p><strong>Command:</strong> {candidateMeta.command?.name}</p>
-              {candidateMeta.center?.name && <p><strong>Centre:</strong> {candidateMeta.center.name}</p>}
+            <div className="form-group">
+              <input
+                type="password"
+                name="dob"
+                value={form.dob}
+                onChange={handleChange}
+                required
+                placeholder="Date of Birth (dd-mm-yyyy)"
+                autoComplete="current-password"
+                disabled={loading}
+              />
             </div>
-          )}
 
-          {error && <div className="error-message">{error}</div>}
+            {paperOptions.length > 0 && (
+              <div className="form-group">
+                <select
+                  name="paperType"
+                  value={selectedPaper}
+                  onChange={(e) => setSelectedPaper(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="">Select Paper</option>
+                  {paperOptions.map((paper) => (
+                    <option key={paper} value={paper}>
+                      {paper}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-          <button type="submit" disabled={disableLogin}>
-            {loading ? "Logging in..." : "Login"}
-          </button>
+            {candidateMeta && (
+              <div className="candidate-peek">
+                <p><strong>Name:</strong> {candidateMeta.name}</p>
+                <p><strong>Trade:</strong> {candidateMeta.trade?.name}</p>
+                <p><strong>Command:</strong> {candidateMeta.command?.name}</p>
+                {candidateMeta.center?.name && (
+                  <p><strong>Centre:</strong> {candidateMeta.center.name}</p>
+                )}
+              </div>
+            )}
 
-          <div className="login-links">
-            <p>
-              Don't have an account? 
+            {error && <div className="error-message">{error}</div>}
+
+            <button type="submit" disabled={disableLogin}>
+              {loading ? "Logging in..." : "Login to Exam Portal"}
+            </button>
+
+            <div className="login-links">
+              <span>Need an account?</span>
               <a href="/candidate/register">Register here</a>
-            </p>
-          </div>
-        </form>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div className="footer-container">
+        <div className="footer-note developed">
+          Developed by SLOG Solutions Pvt Ltd and 2STC
+        </div>
+        <div className="footer-note reserved">
+          All Rights Reserved @ SLOG Solutions Pvt Ltd
+        </div>
       </div>
     </div>
   );

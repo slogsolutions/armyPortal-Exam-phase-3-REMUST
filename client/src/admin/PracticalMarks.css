@@ -2,16 +2,17 @@
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
-  background: #454D55;
+  background: linear-gradient(145deg, #1F2937 0%, #1F2937 45%, #454D55 100%);
   min-height: 100vh;
-  color: #f5f7ff;
+  color: #f8fafc;
 }
 
 .header {
-  background: #454D55;
+  background: rgba(31, 41, 55, 0.9);
   padding: 30px;
-  border-radius: 15px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 22px 38px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   margin-bottom: 30px;
   display: flex;
   justify-content: space-between;
@@ -22,16 +23,17 @@
 
 .header h1 {
   margin: 0;
-  color: #f5f7ff;
+  color: #f8fafc;
   font-size: 2em;
 }
 
 .tab-buttons {
   display: flex;
   gap: 10px;
-  background: #454D55;
+  background: rgba(31, 41, 55, 0.75);
   padding: 5px;
   border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .tab-btn {
@@ -41,7 +43,7 @@
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
-  color: #cfd6df;
+  color: rgba(226, 232, 240, 0.75);
   transition: all 0.3s ease;
 }
 
@@ -51,7 +53,8 @@
 }
 
 .tab-btn:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(96, 165, 250, 0.12);
+  color: #f8fafc;
 }
 
 .loading {
@@ -70,15 +73,16 @@
 }
 
 .candidate-selection {
-  background: #454D55;
+  background: rgba(31, 41, 55, 0.9);
   padding: 30px;
-  border-radius: 15px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 20px 32px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .candidate-selection h2 {
   margin: 0 0 20px 0;
-  color: #f5f7ff;
+  color: #f8fafc;
 }
 
 .candidate-list {
@@ -91,21 +95,23 @@
 
 .candidate-card {
   padding: 15px;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: #f5f7ff;
+  color: #f8fafc;
+  background: rgba(17, 24, 39, 0.45);
 }
 
 .candidate-card:hover {
-  border-color: #7c8cff;
-  background: rgba(124, 140, 255, 0.08);
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.12);
 }
 
 .candidate-card.selected {
-  border-color: #7c8cff;
-  background: linear-gradient(135deg, rgba(124, 140, 255, 0.15), rgba(79, 107, 255, 0.2));
+  border-color: rgba(37, 99, 235, 0.6);
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.28), rgba(37, 99, 235, 0.35));
+  box-shadow: 0 16px 28px rgba(37, 99, 235, 0.22);
 }
 
 .candidate-info {
@@ -113,7 +119,7 @@
   gap: 15px;
   align-items: center;
   margin-bottom: 8px;
-  color: #f5f7ff;
+  color: #f8fafc;
 }
 
 .army-no {
@@ -128,7 +134,7 @@
 }
 
 .trade {
-  color: #cfd6df;
+  color: rgba(226, 232, 240, 0.65);
   font-size: 0.9em;
 }
 
@@ -137,27 +143,28 @@
 }
 
 .has-marks {
-  color: #28a745;
+  color: #34d399;
   font-weight: 600;
   font-size: 0.9em;
 }
 
 .no-marks {
-  color: #dc3545;
+  color: #f87171;
   font-weight: 600;
   font-size: 0.9em;
 }
 
 .marks-form {
-  background: #454D55;
+  background: rgba(31, 41, 55, 0.9);
   padding: 30px;
-  border-radius: 15px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 20px 32px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .marks-form h2 {
   margin: 0 0 10px 0;
-  color: #f5f7ff;
+  color: #f8fafc;
 }
 
 .trade-info {
@@ -181,53 +188,53 @@
 .form-group label {
   margin-bottom: 8px;
   font-weight: 600;
-  color: #f5f7ff;
+  color: #f1f5f9;
 }
 
 .form-group input {
   padding: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
   font-size: 1em;
   transition: border-color 0.3s ease, background 0.3s ease;
-  color: #f5f7ff;
-  background: #454D55;
+  color: #f8fafc;
+  background: rgba(17, 24, 39, 0.6);
 }
 
 .form-group select {
   padding: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
   font-size: 1em;
-  color: #f5f7ff;
-  background: #454D55;
+  color: #f8fafc;
+  background: rgba(17, 24, 39, 0.6);
   appearance: none;
 }
 
 .form-group input::placeholder {
-  color: rgba(245, 247, 255, 0.6);
+  color: rgba(226, 232, 240, 0.55);
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #7c8cff;
-  background: #454D55;
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(17, 24, 39, 0.75);
 }
 
 .form-group select:focus {
   outline: none;
-  border-color: #7c8cff;
+  border-color: rgba(96, 165, 250, 0.45);
 }
 
 .grading-section {
   margin-top: 30px;
   padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .grading-section h3 {
   margin-bottom: 20px;
-  color: #f5f7ff;
+  color: #f8fafc;
 }
 
 .grading-grid {
@@ -266,21 +273,21 @@
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.18);
-  color: #f5f7ff;
+  background: rgba(148, 163, 184, 0.18);
+  color: #f8fafc;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(148, 163, 184, 0.3);
 }
 
 .btn-danger {
-  background: #ef636e;
-  color: white;
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  color: #fdf2f8;
 }
 
 .btn-danger:hover {
-  background: #e34755;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
 .btn-sm {
@@ -290,10 +297,11 @@
 
 /* Bulk Entry */
 .bulk-entry {
-  background: #454D55;
+  background: rgba(31, 41, 55, 0.9);
   padding: 30px;
-  border-radius: 15px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 20px 32px rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .bulk-header {
@@ -305,7 +313,7 @@
 
 .bulk-header h2 {
   margin: 0;
-  color: #f5f7ff;
+  color: #f8fafc;
 }
 
 .candidate-selection-modal {

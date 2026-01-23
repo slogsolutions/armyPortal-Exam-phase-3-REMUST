@@ -19,8 +19,7 @@ function App() {
     <Router>
       <Routes>
         {/* Public Routes */}
-        {/* <Route path="/" element={<AdminLogin />} /> */}
-         <Route path="/" element={<CandidateLogin />} />
+        <Route path="/" element={<AdminLogin />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/candidate/login" element={<CandidateLogin />} />
         <Route path="/candidate/register" element={<Register />} />
