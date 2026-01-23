@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/api";
 import "./CandidateProfile.css";
@@ -41,6 +41,18 @@ const formatDateTime = (value) => {
   return date.toLocaleString();
 };
 
+const getAttemptSortTimestamp = (attempt = {}) => {
+  const candidates = [attempt.submittedAt, attempt.startedAt, attempt.updatedAt, attempt.createdAt];
+  for (const value of candidates) {
+    if (!value) continue;
+    const time = new Date(value).getTime();
+    if (!Number.isNaN(time)) {
+      return time;
+    }
+  }
+  return 0;
+};
+
 const tradeExamTypes = (trade) => {
   if (!trade) return [];
   return TRADE_EXAM_FLAGS.filter(({ flag }) => trade[flag]).map(({ label }) => label);
@@ -57,6 +69,24 @@ export default function CandidateProfile() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [reassigningId, setReassigningId] = useState(null);
+  const [reassignMessage, setReassignMessage] = useState("");
+  const [reassignError, setReassignError] = useState("");
+
+  const getAttemptStatusMeta = useCallback((status) => {
+    switch (status) {
+      case "COMPLETED":
+        return { label: "Completed", tone: "completed" };
+      case "IN_PROGRESS":
+        return { label: "In Progress", tone: "in-progress" };
+      case "PENDING":
+        return { label: "Awaiting Attempt", tone: "pending" };
+      case "CANCELLED":
+        return { label: "Cancelled", tone: "cancelled" };
+      default:
+        return { label: status || "Unknown", tone: "neutral" };
+    }
+  }, []);
 
   const handleAdminAuthError = (error) => {
     if (error?.response?.status === 401 || error?.response?.status === 403) {
@@ -105,8 +135,11 @@ export default function CandidateProfile() {
     }
   };
 
-  const fetchCandidateDetail = async (candidateId) => {
-    setLoading(true);
+  const fetchCandidateDetail = async (candidateId, options = {}) => {
+    const { withSpinner = true } = options;
+    if (withSpinner) {
+      setLoading(true);
+    }
     try {
       const res = await api.get(`/candidate/${candidateId}`);
       const candidateData = res.data;
@@ -144,7 +177,9 @@ export default function CandidateProfile() {
       console.error("Failed to load candidate", error);
       if (handleAdminAuthError(error)) return;
     } finally {
-      setLoading(false);
+      if (withSpinner) {
+        setLoading(false);
+      }
     }
   };
 
@@ -322,6 +357,41 @@ export default function CandidateProfile() {
     }
   };
 
+  const handleReassignAttempt = async (attempt) => {
+    if (!candidateDetail?.id) return;
+
+    const paperLabel = attempt.examPaper?.paperType || "this paper";
+
+    if (!window.confirm(`Reset ${paperLabel} attempt? The candidate will be able to take the test again.`)) {
+      return;
+    }
+
+    setReassignMessage("");
+    setReassignError("");
+    setReassigningId(attempt.id);
+
+    try {
+      const payload = { attemptId: attempt.id };
+      if (attempt.examSlot?.id) {
+        payload.examSlotId = attempt.examSlot.id;
+      }
+
+      const res = await api.post(`/candidate/${candidateDetail.id}/reassign-exam`, payload);
+
+      const message = res.data?.message || `${paperLabel} has been reset.`;
+      setReassignMessage(message);
+
+      const refreshedId = res.data?.candidate?.id || candidateDetail.id;
+      await fetchCandidateDetail(refreshedId, { withSpinner: false });
+    } catch (error) {
+      console.error("Failed to reassign exam", error);
+      if (handleAdminAuthError(error)) return;
+      setReassignError(error.response?.data?.error || "Failed to reassign exam attempt");
+    } finally {
+      setReassigningId(null);
+    }
+  };
+
   const allowedExamTypesForEdit = useMemo(() => {
     const trade = masters.trades.find((item) => String(item.id) === String(editForm.tradeId));
     return tradeExamTypes(trade);
@@ -333,7 +403,37 @@ export default function CandidateProfile() {
   }, [centersByCommand, editForm.commandId]);
 
   const attemptSummary = useMemo(() => {
-    return candidateDetail?.examAttempts || [];
+    const attempts = candidateDetail?.examAttempts || [];
+    if (!attempts.length) return [];
+
+    const sorted = [...attempts].sort(
+      (a, b) => getAttemptSortTimestamp(b) - getAttemptSortTimestamp(a)
+    );
+
+    const latestByPaper = new Map();
+    for (const attempt of sorted) {
+      const paperType = attempt.examPaper?.paperType || "UNKNOWN";
+      if (!latestByPaper.has(paperType)) {
+        latestByPaper.set(paperType, attempt);
+      }
+    }
+
+    const preferredOrder = Array.isArray(candidateDetail?.selectedExamTypes)
+      ? candidateDetail.selectedExamTypes
+      : [];
+
+    const prioritized = preferredOrder
+      .map((type) => latestByPaper.get(type))
+      .filter(Boolean);
+
+    const remaining = [];
+    latestByPaper.forEach((attempt, type) => {
+      if (!preferredOrder.includes(type)) {
+        remaining.push(attempt);
+      }
+    });
+
+    return [...prioritized, ...remaining];
   }, [candidateDetail]);
 
   if (loading) {
@@ -627,12 +727,25 @@ export default function CandidateProfile() {
             )}
           </div>
 
-          {/* Exam Attempts Section */}
-          <div className="exam-attempts-section">
-            <h3>Exam Attempts</h3>
-            {attemptSummary.length === 0 ? (
-              <p>No exam attempts recorded.</p>
-            ) : (
+        </div>
+      </div>
+      <div className="exam-attempts-panel">
+        <div className="exam-attempts-section">
+          <div className="exam-attempts-header">
+            <div>
+              <h3>Exam Attempts</h3>
+              <p className="exam-attempts-subtitle">Monitor progress and reset attempts when needed.</p>
+            </div>
+          </div>
+          {(reassignMessage || reassignError) && (
+            <div className={`reassign-banner ${reassignError ? "error" : "success"}`}>
+              {reassignError || reassignMessage}
+            </div>
+          )}
+          {attemptSummary.length === 0 ? (
+            <p>No exam attempts recorded.</p>
+          ) : (
+            <div className="attempts-table-wrapper">
               <table className="attempts-table">
                 <thead>
                   <tr>
@@ -641,26 +754,55 @@ export default function CandidateProfile() {
                     <th>Score</th>
                     <th>Percentage</th>
                     <th>Submitted</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {attemptSummary.map((attempt) => (
-                    <tr key={attempt.id}>
-                      <td>{attempt.examPaper?.paperType || "—"}</td>
-                      <td>{attempt.status}</td>
-                      <td>{attempt.score ?? "—"}</td>
-                      <td>
-                        {typeof attempt.percentage === "number"
-                          ? `${attempt.percentage.toFixed(2)}%`
-                          : "—"}
-                      </td>
-                      <td>{formatDateTime(attempt.submittedAt) || "—"}</td>
-                    </tr>
-                  ))}
+                  {attemptSummary.map((attempt) => {
+                    const statusMeta = getAttemptStatusMeta(attempt.status);
+                    const isCompleted = attempt.status === "COMPLETED";
+                    const hasScore = typeof attempt.score === "number" && isCompleted;
+                    const hasPercentage = typeof attempt.percentage === "number" && isCompleted;
+                    const submittedLabel = isCompleted
+                      ? formatDateTime(attempt.submittedAt)
+                      : attempt.status === "IN_PROGRESS"
+                        ? "In progress"
+                        : "Not yet submitted";
+
+                    return (
+                      <tr key={attempt.id} className={`attempt-row status-${statusMeta.tone}`}>
+                        <td>{attempt.examPaper?.paperType || "—"}</td>
+                        <td>
+                          <span className={`status-badge status-${statusMeta.tone}`}>
+                            {statusMeta.label}
+                          </span>
+                        </td>
+                        <td>{hasScore ? attempt.score.toFixed(2) : "—"}</td>
+                        <td>{hasPercentage ? `${attempt.percentage.toFixed(2)}%` : "—"}</td>
+                        <td>{submittedLabel || "—"}</td>
+                        <td className="attempt-actions">
+                          {isCompleted ? (
+                            <button
+                              type="button"
+                              className="reassign-btn"
+                              onClick={() => handleReassignAttempt(attempt)}
+                              disabled={reassigningId === attempt.id}
+                            >
+                              {reassigningId === attempt.id ? "Reassigning..." : "Reassign Exam"}
+                            </button>
+                          ) : (
+                            <span className="attempt-action-hint">
+                              {attempt.status === "PENDING" ? "Ready for retake" : "—"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

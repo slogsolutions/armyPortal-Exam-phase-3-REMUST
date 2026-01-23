@@ -867,6 +867,193 @@ exports.updateCandidate = async (req, res) => {
   }
 };
 
+/* ================= REASSIGN EXAM ATTEMPT (ADMIN) ================= */
+
+exports.reassignExamAttempt = async (req, res) => {
+  try {
+    const candidateId = Number(req.params.candidateId);
+    if (!candidateId || Number.isNaN(candidateId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid candidate id is required"
+      });
+    }
+
+    const { attemptId, paperType, examSlotId } = req.body || {};
+
+    if (!attemptId && !paperType) {
+      return res.status(400).json({
+        success: false,
+        error: "Provide either an attemptId or paperType to reassign"
+      });
+    }
+
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+      include: {
+        trade: true,
+        command: true,
+        center: true,
+        examAttempts: {
+          include: {
+            examPaper: true,
+            examSlot: true
+          },
+          orderBy: { createdAt: "desc" }
+        }
+      }
+    });
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        error: "Candidate not found"
+      });
+    }
+
+    let targetAttempt = null;
+    if (attemptId) {
+      const numericAttemptId = Number(attemptId);
+      targetAttempt = candidate.examAttempts.find((attempt) => attempt.id === numericAttemptId);
+    }
+
+    if (!targetAttempt && paperType) {
+      targetAttempt = candidate.examAttempts.find(
+        (attempt) => attempt.examPaper?.paperType === paperType
+      );
+    }
+
+    if (!targetAttempt) {
+      return res.status(404).json({
+        success: false,
+        error: "Exam attempt not found for the candidate"
+      });
+    }
+
+    if (!targetAttempt.examPaper) {
+      return res.status(400).json({
+        success: false,
+        error: "Exam attempt is not linked to an exam paper"
+      });
+    }
+
+    const resolvedPaperType = targetAttempt.examPaper.paperType;
+
+    let validatedSlot = null;
+    if (examSlotId) {
+      const numericSlotId = Number(examSlotId);
+      validatedSlot = await prisma.examSlot.findUnique({
+        where: { id: numericSlotId },
+        include: { command: true, center: true }
+      });
+
+      if (!validatedSlot) {
+        return res.status(404).json({
+          success: false,
+          error: "Specified exam slot not found"
+        });
+      }
+
+      if (validatedSlot.tradeId !== candidate.tradeId) {
+        return res.status(400).json({
+          success: false,
+          error: "Exam slot trade does not match candidate trade"
+        });
+      }
+
+      if (validatedSlot.commandId !== candidate.commandId) {
+        return res.status(400).json({
+          success: false,
+          error: "Exam slot command does not match candidate command"
+        });
+      }
+
+      if (candidate.centerId && validatedSlot.centerId !== candidate.centerId) {
+        return res.status(400).json({
+          success: false,
+          error: "Exam slot center does not match candidate center"
+        });
+      }
+
+      if (validatedSlot.paperType !== resolvedPaperType) {
+        return res.status(400).json({
+          success: false,
+          error: "Exam slot paper type does not match the attempt paper"
+        });
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.answer.deleteMany({ where: { examAttemptId: targetAttempt.id } });
+
+      await tx.examAttempt.update({
+        where: { id: targetAttempt.id },
+        data: {
+          status: "PENDING",
+          score: 0,
+          percentage: 0,
+          startedAt: null,
+          submittedAt: null,
+          examSlotId: validatedSlot ? validatedSlot.id : targetAttempt.examSlotId
+        }
+      });
+
+      if (validatedSlot) {
+        await tx.examSlot.update({
+          where: { id: validatedSlot.id },
+          data: {
+            candidates: {
+              connect: { id: candidateId }
+            }
+          }
+        });
+
+        await recalcSlotCurrentCount(tx, validatedSlot.id);
+      }
+    });
+
+    // Ensure an active slot exists when not explicitly provided
+    let ensuredSlot = null;
+    if (!validatedSlot) {
+      try {
+        ensuredSlot = await ensureSlotForPaper(candidate, resolvedPaperType);
+      } catch (slotError) {
+        console.warn('Slot ensuring failed during reassignment:', slotError.message);
+      }
+    }
+
+    const refreshedCandidate = await loadCandidateDetail(candidateId);
+
+    const selectedTypes = refreshedCandidate?.selectedExamTypes || [];
+    const orderedTypes = getOrderedWrittenTypes(selectedTypes);
+    const completedPapers = new Set(
+      (refreshedCandidate?.examAttempts || [])
+        .filter((attempt) => attempt.status === "COMPLETED" && attempt.examPaper)
+        .map((attempt) => attempt.examPaper.paperType)
+    );
+
+    const nextPaper = orderedTypes.find((type) => !completedPapers.has(type)) || null;
+
+    res.json({
+      success: true,
+      message: `${resolvedPaperType} has been reset. Candidate can attempt the paper again.`,
+      candidate: refreshedCandidate,
+      reassignment: {
+        attemptId: targetAttempt.id,
+        paperType: resolvedPaperType,
+        slot: slotSummary(validatedSlot || ensuredSlot)
+      },
+      nextPaper
+    });
+  } catch (error) {
+    console.error('💥 Error reassigning exam attempt:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to reassign exam attempt"
+    });
+  }
+};
+
 /* ================= DELETE CANDIDATE (ADMIN) ================= */
 
 exports.deleteCandidate = async (req, res) => {

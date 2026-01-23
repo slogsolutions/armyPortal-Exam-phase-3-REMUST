@@ -9,6 +9,13 @@ router.post("/login", ctrl.login);
 /* ===== CANDIDATE REGISTRATION (PUBLIC) ===== */
 router.post("/register", ctrl.register);
 
+/* ===== CANDIDATE EXAM REASSIGNMENT (ADMIN ONLY) ===== */
+router.post(
+  "/:candidateId/reassign-exam",
+  isAuth(["ADMIN"]),
+  ctrl.reassignExamAttempt
+);
+
 /* ===== GET CANDIDATE DATA (CANDIDATE OR ADMIN) ===== */
 router.get("/:candidateId", isAuth(["CANDIDATE", "ADMIN"]), ctrl.getCandidateById);
 
