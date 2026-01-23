@@ -13,6 +13,7 @@ import ExamSlots from "./ExamSlots";
 import PracticalMarks from "./PracticalMarks";
 import Results from "./Results";
 import CandidateManager from "./CandidateManager";
+import CandidateProfile from "./CandidateProfile";
 import DeleteData from "./DeleteData";
 import "./AdminDashboard.css";
 
@@ -31,6 +32,7 @@ export default function AdminDashboard() {
     else if (path.includes("/admin/exam-slots")) setActiveTab("exam-slots");
     else if (path.includes("/admin/practical-marks")) setActiveTab("practical-marks");
     else if (path.includes("/admin/results")) setActiveTab("results");
+    else if (path.includes("/admin/candidates") || path.includes("/admin/candidate-profile")) setActiveTab("candidates");
     else if (path === "/admin" || path === "/admin/") setActiveTab("masters");
   }, [location]);
 
@@ -46,12 +48,6 @@ export default function AdminDashboard() {
     //   label: "Master Data",
     //   icon: "⚪",
     //   path: "/admin/masters"
-    // },
-    // {
-    //   id: "trade-config",
-    //   label: "Trade Configuration",
-    //   icon: "⚪",
-    //   path: "/admin/trade-config"
     // },
     {
       id: "upload-paper",
@@ -188,6 +184,7 @@ export default function AdminDashboard() {
             <Route path="exam-slots" element={<ExamSlots />} />
             <Route path="practical-marks" element={<PracticalMarks />} />
             <Route path="candidates" element={<CandidateManager />} />
+            <Route path="candidate-profile/:candidateId" element={<CandidateProfile />} />
             <Route path="results" element={<Results />} />
             <Route path="delete-data" element={<DeleteData />} />
           </Routes>

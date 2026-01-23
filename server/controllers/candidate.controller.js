@@ -666,13 +666,14 @@ exports.getAllCandidates = async (req, res) => {
           }
         }
       },
-      orderBy: { createdAt: "desc" }
+      orderBy: { id: "desc" }
     });
 
     const mapped = candidates.map((candidate) => {
       const selectedExamTypes = parseSelectedExamTypesString(candidate.selectedExamTypes);
-      const completedAttempts = candidate.examAttempts.filter((attempt) => attempt.status === "COMPLETED");
-      const inProgressAttempts = candidate.examAttempts.filter((attempt) => attempt.status === "IN_PROGRESS");
+      const attempts = Array.isArray(candidate.examAttempts) ? candidate.examAttempts : [];
+      const completedAttempts = attempts.filter((attempt) => attempt?.status === "COMPLETED");
+      const inProgressAttempts = attempts.filter((attempt) => attempt?.status === "IN_PROGRESS");
 
       return {
         ...candidate,
@@ -680,13 +681,14 @@ exports.getAllCandidates = async (req, res) => {
         attemptSummary: {
           completed: completedAttempts.length,
           inProgress: inProgressAttempts.length,
-          total: candidate.examAttempts.length,
+          total: attempts.length
         }
       };
     });
 
     res.json(mapped);
   } catch (error) {
+    console.error("getAllCandidates error:", error);
     res.status(500).json({ error: error.message });
   }
 };

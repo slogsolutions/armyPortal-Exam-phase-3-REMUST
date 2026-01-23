@@ -4,32 +4,57 @@ const api = axios.create({
   baseURL: "http://localhost:5000/api"
 });
 
+const normalizePath = (path = "") => (path.startsWith("/") ? path : `/${path}`);
+
+const isAdminRequest = (urlPath = "", currentPath = "") => {
+  const normalizedUrl = normalizePath(urlPath);
+  const inAdminShell = currentPath.startsWith("/admin");
+  return (
+    normalizedUrl.startsWith("/admin") ||
+    normalizedUrl.startsWith("/exam-slot") ||
+    (inAdminShell &&
+      (normalizedUrl.startsWith("/candidate") ||
+        normalizedUrl.startsWith("/practical") ||
+        normalizedUrl.startsWith("/result") ||
+        normalizedUrl.startsWith("/exam")))
+  );
+};
+
+const isCandidateRequest = (urlPath = "") => {
+  const normalizedUrl = normalizePath(urlPath);
+  return (
+    normalizedUrl.startsWith("/candidate") ||
+    normalizedUrl.startsWith("/briefing") ||
+    normalizedUrl.startsWith("/exam") ||
+    normalizedUrl.startsWith("/result")
+  );
+};
+
+let adminSessionNotified = false;
+
+const handleAdminSessionExpiry = () => {
+  if (adminSessionNotified) return;
+  adminSessionNotified = true;
+  alert("Admin session expired. Please login again.");
+  localStorage.removeItem("adminToken");
+  localStorage.removeItem("admin");
+  localStorage.removeItem("adminId");
+  if (!window.location.pathname.startsWith("/admin/login")) {
+    window.location.replace("/admin/login");
+  }
+};
+
 api.interceptors.request.use((config) => {
   const adminToken = localStorage.getItem("adminToken");
   const candidateToken = localStorage.getItem("candidateToken");
 
   const urlPath = config.url || "";
   const currentPath = window?.location?.pathname || "";
-  const inAdminShell = currentPath.startsWith("/admin");
   let token = null;
 
-  const ensureAdmin =
-    urlPath.startsWith("/admin") ||
-    urlPath.startsWith("/exam-slot") ||
-    (inAdminShell &&
-      (urlPath.startsWith("/candidate") ||
-        urlPath.startsWith("/practical") ||
-        urlPath.startsWith("/result") ||
-        urlPath.startsWith("/exam")));
-
-  if (ensureAdmin) {
+  if (isAdminRequest(urlPath, currentPath)) {
     token = adminToken;
-  } else if (
-    urlPath.startsWith("/candidate") ||
-    urlPath.startsWith("/briefing") ||
-    urlPath.startsWith("/exam") ||
-    urlPath.startsWith("/result")
-  ) {
+  } else if (isCandidateRequest(urlPath)) {
     token = candidateToken;
   } else {
     token = adminToken || candidateToken;
@@ -47,5 +72,20 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const urlPath = error.config?.url || "";
+    const currentPath = window?.location?.pathname || "";
+
+    if ((status === 401 || status === 403) && isAdminRequest(urlPath, currentPath)) {
+      handleAdminSessionExpiry();
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export default api;

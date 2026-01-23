@@ -2,15 +2,16 @@
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
-  background: #f5f5f5;
+  background: #454D55;
   min-height: 100vh;
+  color: #f2f4f7;
 }
 
 .header {
-  background: white;
+  background: #2d3338;
   padding: 30px;
   border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.35);
   margin-bottom: 30px;
   display: flex;
   justify-content: space-between;
@@ -21,14 +22,14 @@
 
 .header h1 {
   margin: 0;
-  color: #333;
+  color: #f2f4f7;
   font-size: 2em;
 }
 
 .view-tabs {
   display: flex;
   gap: 10px;
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.08);
   padding: 5px;
   border-radius: 10px;
 }
@@ -40,38 +41,39 @@
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
-  color: #666;
+  color: #c9d1d9;
   transition: all 0.3s ease;
 }
 
 .tab-btn.active {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #00B4DB, #0083B0);
   color: white;
+  box-shadow: 0 8px 20px rgba(0, 180, 219, 0.35);
 }
 
 .tab-btn:hover:not(.active) {
-  background: #e9ecef;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .loading {
   text-align: center;
   padding: 50px;
   font-size: 1.2em;
-  color: #666;
+  color: #cbd5e1;
 }
 
 /* Filters Section */
 .filters-section {
-  background: white;
+  background: #2d3338;
   padding: 30px;
   border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.35);
   margin-bottom: 30px;
 }
 
 .filters-section h3 {
   margin: 0 0 25px 0;
-  color: #333;
+  color: #f2f4f7;
   font-size: 1.3em;
 }
 
@@ -90,22 +92,24 @@
 .filter-group label {
   margin-bottom: 8px;
   font-weight: 600;
-  color: #333;
+  color: #e2e8f0;
 }
 
 .filter-group select,
 .filter-group input {
   padding: 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   font-size: 1em;
-  transition: border-color 0.3s ease;
+  transition: border-color 0.3s ease, background 0.3s ease;
+  background: rgba(0, 0, 0, 0.2);
+  color: #f2f4f7;
 }
 
 .filter-group select:focus,
 .filter-group input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #00B4DB;
 }
 
 .filter-actions {
@@ -128,8 +132,9 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #00B4DB, #0083B0);
   color: white;
+  box-shadow: 0 10px 25px rgba(0, 180, 219, 0.35);
 }
 
 .btn-primary:hover {
@@ -138,26 +143,26 @@
 }
 
 .btn-secondary {
-  background: #6c757d;
-  color: white;
+  background: rgba(255, 255, 255, 0.18);
+  color: #e2e8f0;
 }
 
 .btn-secondary:hover {
-  background: #5a6268;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Export Section */
 .export-section {
-  background: white;
+  background: #2d3338;
   padding: 30px;
   border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.35);
   margin-bottom: 30px;
 }
 
 .export-section h3 {
   margin: 0 0 25px 0;
-  color: #333;
+  color: #f2f4f7;
   font-size: 1.3em;
 }
 
@@ -169,16 +174,16 @@
 
 /* Results Section */
 .results-section {
-  background: white;
+  background: #2d3338;
   padding: 30px;
   border-radius: 15px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.35);
 }
 
 .empty-state {
   text-align: center;
   padding: 60px;
-  color: #666;
+  color: #cbd5e1;
 }
 
 .empty-state p {
@@ -194,28 +199,29 @@
 .results-table {
   width: 100%;
   border-collapse: collapse;
-  background: white;
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 10px;
   overflow: hidden;
+  color: #e4e9f1;
 }
 
 .results-table th,
 .results-table td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .results-table th {
-  background: #f8f9fa;
+  background: rgba(255, 255, 255, 0.08);
   font-weight: 600;
-  color: #333;
+  color: #f2f4f7;
   position: sticky;
   top: 0;
 }
 
 .results-table tbody tr:hover {
-  background: #f8f9ff;
+  background: rgba(0, 180, 219, 0.08);
 }
 
 .status-badge {
@@ -227,13 +233,13 @@
 }
 
 .status-badge.pass {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(15, 222, 157, 0.15);
+  color: #0fde9d;
 }
 
 .status-badge.fail {
-  background: #f8d7da;
-  color: #721c24;
+  background: rgba(255, 99, 132, 0.2);
+  color: #ff6384;
 }
 
 /* Trade Wise Results */
@@ -244,15 +250,16 @@
 }
 
 .trade-result-card {
-  background: #f8f9fa;
+  background: rgba(0, 0, 0, 0.2);
   padding: 25px;
   border-radius: 12px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid #00B4DB;
+  color: #e2e8f0;
 }
 
 .trade-result-card h3 {
   margin: 0 0 20px 0;
-  color: #333;
+  color: #f2f4f7;
   font-size: 1.4em;
 }
 
@@ -270,12 +277,12 @@
 }
 
 .stat .label {
-  color: #666;
+  color: #cbd5e1;
   font-weight: 500;
 }
 
 .stat .value {
-  color: #333;
+  color: #f2f4f7;
   font-weight: 600;
   font-size: 1.1em;
 }
@@ -290,7 +297,7 @@
 
 .paper-breakdown h4 {
   margin: 0 0 15px 0;
-  color: #333;
+  color: #f2f4f7;
   font-size: 1.1em;
 }
 
@@ -299,21 +306,21 @@
   justify-content: space-between;
   align-items: center;
   padding: 10px 12px;
-  background: white;
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 6px;
   margin-bottom: 8px;
 }
 
 .paper-type {
   font-weight: 600;
-  color: #333;
+  color: #f2f4f7;
 }
 
 .paper-details {
   display: flex;
   gap: 15px;
   font-size: 0.9em;
-  color: #666;
+  color: #cbd5e1;
 }
 
 /* Candidate Wise Results */
@@ -324,10 +331,11 @@
 }
 
 .candidate-result-card {
-  background: #f8f9fa;
+  background: rgba(0, 0, 0, 0.2);
   padding: 25px;
   border-radius: 12px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid #00B4DB;
+  color: #e2e8f0;
 }
 
 .candidate-header {
@@ -336,12 +344,12 @@
 
 .candidate-info h3 {
   margin: 0 0 5px 0;
-  color: #333;
+  color: #f2f4f7;
   font-size: 1.3em;
 }
 
 .army-no {
-  color: #666;
+  color: #cbd5e1;
   font-weight: 600;
 }
 
@@ -350,7 +358,7 @@
   gap: 15px;
   margin-top: 8px;
   font-size: 0.9em;
-  color: #666;
+  color: #cbd5e1;
 }
 
 .candidate-stats {
@@ -359,7 +367,7 @@
   gap: 8px;
   margin-bottom: 20px;
   padding: 15px;
-  background: white;
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 8px;
 }
 
@@ -371,7 +379,7 @@
 .written-results h4,
 .practical-results h4 {
   margin: 0 0 12px 0;
-  color: #333;
+  color: #f2f4f7;
   font-size: 1.1em;
 }
 
@@ -380,7 +388,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: white;
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 6px;
   margin-bottom: 8px;
 }
@@ -396,28 +404,28 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: white;
+  background: rgba(0, 0, 0, 0.25);
   border-radius: 6px;
 }
 
 .exam-type {
   font-weight: 600;
-  color: #333;
+  color: #f2f4f7;
   font-size: 0.9em;
 }
 
 .marks {
-  color: #667eea;
+  color: #00B4DB;
   font-weight: 600;
 }
 
 .score {
-  color: #667eea;
+  color: #00B4DB;
   font-weight: 600;
 }
 
 .date {
-  color: #666;
+  color: #cbd5e1;
   font-size: 0.9em;
 }
 
