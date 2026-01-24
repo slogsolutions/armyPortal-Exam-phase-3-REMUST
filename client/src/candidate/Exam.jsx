@@ -338,6 +338,7 @@ export default function Exam() {
   const currentQ = paper.questions[currentQuestion];
   const answeredCount = Object.keys(answers).length;
   const totalQuestions = paper.questions.length;
+  const isLastQuestion = currentQuestion === totalQuestions - 1;
   const tradeName = paper.trade?.name || paper.tradeName || paper.trade?.title || "";
   const optionEntries = ["A", "B", "C", "D"]
     .map((key) => {
@@ -519,14 +520,16 @@ export default function Exam() {
             </div>
           </section>
 
-          <section className="submit-footer">
-            <button type="button" className="btn btn-success" onClick={handleSubmit}>
-              Submit Exam
-            </button>
-            <p className="submit-hint">
-              Once submitted, you cannot make changes. Please ensure you have reviewed all questions.
-            </p>
-          </section>
+          {isLastQuestion && (
+            <section className="submit-footer">
+              <button type="button" className="btn btn-success" onClick={handleSubmit}>
+                Submit Exam
+              </button>
+              <p className="submit-hint">
+                Once submitted, you cannot make changes. Please ensure you have reviewed all questions.
+              </p>
+            </section>
+          )}
         </main>
       </div>
     </>

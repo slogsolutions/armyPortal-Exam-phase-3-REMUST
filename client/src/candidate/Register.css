@@ -190,6 +190,31 @@
   background: rgba(14, 20, 14, 0.85);
 }
 
+.exam-option.readonly {
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+
+.exam-option.readonly .exam-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--army-gold);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.exam-option.readonly .exam-title {
+  flex: 1;
+  margin-left: 16px;
+  color: rgba(240, 240, 240, 0.92);
+  font-weight: 600;
+}
+
 .exam-warning,
 .exam-placeholder {
   margin: 0;

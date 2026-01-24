@@ -4,6 +4,12 @@ import api from "../api/api";
 import armyBg from "../../img/army.jpg";
 import "./Register.css";
 
+const EXAM_TYPE_CONFIG = [
+  { flag: "wp1", value: "WP-I", title: "Written Paper I" },
+  { flag: "wp2", value: "WP-II", title: "Written Paper II" },
+  { flag: "wp3", value: "WP-III", title: "Written Paper III" }
+];
+
 export default function Register() {
   const navigate = useNavigate();
 
@@ -61,36 +67,46 @@ export default function Register() {
 
   const transformedTrades = useMemo(() => masters.trades, [masters.trades]);
 
+  const availableExamTypes = useMemo(() => {
+    if (!selectedTrade) return [];
+    return EXAM_TYPE_CONFIG.filter(({ flag }) => selectedTrade[flag]);
+  }, [selectedTrade]);
+
   /* ===== HANDLE CHANGE ===== */
   const handleChange = (e) => {
     const { name, value } = e.target;
 
-    setForm(prev => ({ ...prev, [name]: value }));
-    setErrors(prev => ({ ...prev, [name]: "" }));
-
+    let resolvedTrade = selectedTrade;
     if (name === "tradeId") {
-      const trade = Array.isArray(transformedTrades)
+      resolvedTrade = Array.isArray(transformedTrades)
         ? transformedTrades.find(t => t.id === Number(value))
         : null;
-
-      setSelectedTrade(trade || null);
-      setForm(prev => ({ ...prev, selectedExamTypes: trade ? prev.selectedExamTypes : [] }));
+      setSelectedTrade(resolvedTrade || null);
     }
 
-    if (name === "commandId") {
-      setForm(prev => ({ ...prev, centerId: "" }));
+    setForm(prev => {
+      const next = { ...prev, [name]: value };
+
+      if (name === "tradeId") {
+        const autoTypes = resolvedTrade
+          ? EXAM_TYPE_CONFIG.filter(({ flag }) => resolvedTrade[flag])
+              .map(({ value: paperValue }) => paperValue)
+          : [];
+        next.selectedExamTypes = autoTypes;
+      }
+
+      if (name === "commandId") {
+        next.centerId = "";
+      }
+
+      return next;
+    });
+
+    if (name === "tradeId") {
+      setErrors(prev => ({ ...prev, tradeId: "", selectedExamTypes: "" }));
+    } else {
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
-  };
-
-  /* ===== HANDLE EXAM TYPE SELECTION ===== */
-  const handleExamTypeChange = (examType) => {
-    const currentTypes = form.selectedExamTypes || [];
-    const newTypes = currentTypes.includes(examType)
-      ? currentTypes.filter(t => t !== examType)
-      : [...currentTypes, examType];
-
-    setForm(prev => ({ ...prev, selectedExamTypes: newTypes }));
-    setErrors(prev => ({ ...prev, selectedExamTypes: "" }));
   };
 
   /* ===== VALIDATION ===== */
@@ -357,40 +373,17 @@ export default function Register() {
       {selectedTrade ? (
         <div className={examSectionClass}>
           <p className="exam-helper">
-            Select the written papers you are appearing for. Only enabled papers for the chosen trade are shown.
+            The following written papers are allotted for your selected trade. These will be scheduled by the exam cell.
           </p>
           <div className="exam-list">
-            {selectedTrade.wp1 && (
-              <label className="exam-option">
-                <input
-                  type="checkbox"
-                  checked={form.selectedExamTypes.includes("WP-I")}
-                  onChange={() => handleExamTypeChange("WP-I")}
-                />
-                <span>WP-I · Written Paper I</span>
-              </label>
-            )}
-            {selectedTrade.wp2 && (
-              <label className="exam-option">
-                <input
-                  type="checkbox"
-                  checked={form.selectedExamTypes.includes("WP-II")}
-                  onChange={() => handleExamTypeChange("WP-II")}
-                />
-                <span>WP-II · Written Paper II</span>
-              </label>
-            )}
-            {selectedTrade.wp3 && (
-              <label className="exam-option">
-                <input
-                  type="checkbox"
-                  checked={form.selectedExamTypes.includes("WP-III")}
-                  onChange={() => handleExamTypeChange("WP-III")}
-                />
-                <span>WP-III · Written Paper III</span>
-              </label>
-            )}
-            {!selectedTrade.wp1 && !selectedTrade.wp2 && !selectedTrade.wp3 && (
+            {availableExamTypes.length > 0 ? (
+              availableExamTypes.map(({ value, title }) => (
+                <div key={value} className="exam-option readonly">
+                  <span className="exam-tag">{value}</span>
+                  <span className="exam-title">{title}</span>
+                </div>
+              ))
+            ) : (
               <p className="exam-warning">No written papers are enabled for the selected trade. Contact the admin.</p>
             )}
           </div>
