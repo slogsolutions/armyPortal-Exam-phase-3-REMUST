@@ -758,10 +758,7 @@ exports.bulkUploadPapers = async (req, res) => {
         const existingQuestion = await prisma.question.findFirst({
           where: {
             examPaperId: paper.id,
-            questionText: {
-              equals: questionText,
-              mode: "insensitive"
-            }
+            questionText: questionText
           }
         });
 

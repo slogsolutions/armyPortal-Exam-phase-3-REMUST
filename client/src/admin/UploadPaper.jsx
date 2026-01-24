@@ -3,18 +3,6 @@ import api from "../api/api";
 import "./UploadPaper.css";
 
 export default function UploadPaper() {
-  const [masters, setMasters] = useState({ trades: [] });
-  const [form, setForm] = useState({
-    tradeId: "",
-    paperType: "",
-    questionText: "",
-    optionA: "",
-    optionB: "",
-    optionC: "",
-    optionD: "",
-    correctAnswer: "",
-    marks: "1.0"
-  });
   const [file, setFile] = useState(null);
   const [fileMeta, setFileMeta] = useState({ name: "", extension: "" });
   const [uploading, setUploading] = useState(false);
@@ -25,9 +13,7 @@ export default function UploadPaper() {
   const allowedExtensions = ["csv", "xls", "xlsx", "dat"];
 
   useEffect(() => {
-    api.get("/admin/masters")
-      .then(res => setMasters(res.data))
-      .catch(() => alert("Failed to load trades"));
+    // Component initialization - no masters needed for bulk upload only
   }, []);
 
   const handleSubmit = async (e) => {
@@ -74,6 +60,18 @@ export default function UploadPaper() {
       }
     } catch (err) {
       console.error("Upload failed:", err);
+      
+      // Log detailed error information to console for debugging
+      if (err.response?.data) {
+        console.log("Server response:", err.response.data);
+        if (err.response.data.errors) {
+          console.log("Detailed errors:", err.response.data.errors);
+        }
+        if (err.response.data.errorSamples) {
+          console.log("Error samples:", err.response.data.errorSamples);
+        }
+      }
+      
       const errorData = err.response?.data;
       if (errorData) {
         setUploadResult({
@@ -226,29 +224,29 @@ export default function UploadPaper() {
 
               {uploadResult.errorBreakdown?.length > 0 && (
                 <div className="upload-errors">
-                  <h4>Error Breakdown</h4>
-                  <ul>
+                  <h4>Error Summary</h4>
+                  <div className="error-breakdown">
                     {uploadResult.errorBreakdown.map(({ reason, count }, index) => (
-                      <li key={`${reason}-${index}`}>
-                        <span className="reason">{reason}</span>
-                        <span className="count">{count}</span>
-                      </li>
+                      <div key={`${reason}-${index}`} className="error-item">
+                        <span className="error-reason">{reason}</span>
+                        <span className="error-count">({count} occurrences)</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
+                  <p className="error-help">
+                    💡 <strong>Common fixes:</strong> Check file format, ensure all required columns are present, 
+                    verify trade names match exactly, and ensure correct answer values (A, B, C, or D).
+                  </p>
                 </div>
               )}
 
               {uploadResult.errorSamples?.length > 0 && (
-                <details className="error-samples" open={status !== "success"}>
-                  <summary>View sample problematic rows ({uploadResult.errorSamples.length})</summary>
-                  <div className="samples">
-                    {uploadResult.errorSamples.map((sample, index) => (
-                      <div key={index} className="sample-row">
-                        <pre>{JSON.stringify(sample.row, null, 2)}</pre>
-                        <p className="sample-error">{sample.error}</p>
-                      </div>
-                    ))}
-                  </div>
+                <details className="error-samples">
+                  <summary>Technical Details (for debugging)</summary>
+                  <p className="debug-note">
+                    ⚠️ Raw error details have been logged to browser console for technical review.
+                    Open Developer Tools → Console to view detailed error information.
+                  </p>
                 </details>
               )}
             </div>
