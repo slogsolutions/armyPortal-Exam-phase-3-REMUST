@@ -161,7 +161,7 @@ export default function CandidateLogin() {
                 value={form.dob}
                 onChange={handleChange}
                 required
-                placeholder="Date of Birth (dd-mm-yyyy)"
+                placeholder="Date of Birth (yyyy-mm-dd)"
                 autoComplete="current-password"
                 disabled={loading}
               />
