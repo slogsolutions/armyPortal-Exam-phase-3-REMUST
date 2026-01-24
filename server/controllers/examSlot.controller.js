@@ -243,6 +243,11 @@ exports.assignToSlot = async (req, res) => {
       return res.status(404).json({ error: "Exam slot not found" });
     }
 
+    // Check if slot is active
+    if (!slot.isActive) {
+      return res.status(400).json({ error: "Exam slot is not active" });
+    }
+
     // Ensure candidate belongs to the same command (and center if provided)
     if (candidate.commandId !== slot.commandId) {
       return res.status(403).json({ error: "Candidate does not belong to the slot's command" });
@@ -289,6 +294,49 @@ exports.assignToSlot = async (req, res) => {
 };
 
 /**
+ * Toggle exam slot status (active/inactive)
+ */
+exports.toggleSlotStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const existingSlot = await prisma.examSlot.findUnique({
+      where: { id: Number(id) },
+      include: {
+        trade: true,
+        command: true,
+        center: true
+      }
+    });
+
+    if (!existingSlot) {
+      return res.status(404).json({ error: "Exam slot not found" });
+    }
+
+    const updatedSlot = await prisma.examSlot.update({
+      where: { id: Number(id) },
+      data: {
+        isActive: !existingSlot.isActive
+      },
+      include: {
+        trade: true,
+        command: true,
+        center: true
+      }
+    });
+
+    const enrichedSlot = await attachQuestionCount(updatedSlot, prisma);
+
+    res.json({
+      ...enrichedSlot,
+      message: `Slot ${updatedSlot.isActive ? 'activated' : 'deactivated'} successfully`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
  * Update exam slot
  */
 exports.updateExamSlot = async (req, res) => {
@@ -300,7 +348,8 @@ exports.updateExamSlot = async (req, res) => {
       startTime,
       endTime,
       commandId,
-      centerId
+      centerId,
+      isActive
     } = req.body;
 
     const existingSlot = await prisma.examSlot.findUnique({
@@ -363,7 +412,8 @@ exports.updateExamSlot = async (req, res) => {
       commandId: resolvedCommandId,
       centerId: resolvedCenterId,
       ...(startTime ? { startTime: new Date(startTime) } : {}),
-      ...(endTime ? { endTime: new Date(endTime) } : {})
+      ...(endTime ? { endTime: new Date(endTime) } : {}),
+      ...(typeof isActive === 'boolean' ? { isActive } : {})
     };
 
     const examSlotRaw = await prisma.examSlot.update({

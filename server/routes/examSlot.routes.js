@@ -6,6 +6,7 @@ const adminAuth = require("../middlewares/adminAuth");
 router.post("/", adminAuth, ctrl.createExamSlot);
 router.get("/", adminAuth, ctrl.getExamSlots);
 router.put("/:id", adminAuth, ctrl.updateExamSlot);
+router.patch("/:id/toggle-status", adminAuth, ctrl.toggleSlotStatus);
 router.delete("/:id", adminAuth, ctrl.deleteExamSlot);
 router.get("/:id", adminAuth, ctrl.getSlotDetails);
 router.post("/:id/auto-assign", adminAuth, ctrl.triggerAutoAssignment);

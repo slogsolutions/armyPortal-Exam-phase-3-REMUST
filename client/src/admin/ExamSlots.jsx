@@ -169,6 +169,32 @@ export default function ExamSlots() {
     }
   };
 
+  const handleToggleStatus = async (slotId, currentStatus) => {
+    try {
+      const res = await api.patch(`/exam-slot/${slotId}/toggle-status`);
+      
+      // Update the slot in the local state
+      setSlots(prevSlots => 
+        prevSlots.map(slot => 
+          slot.id === slotId 
+            ? { ...slot, isActive: !currentStatus }
+            : slot
+        )
+      );
+      
+      // Show success message briefly
+      setError("");
+      const message = res.data.message || `Slot ${!currentStatus ? 'activated' : 'deactivated'} successfully`;
+      
+      // You could add a success message state if needed
+      console.log(message);
+      
+    } catch (err) {
+      console.error("Failed to toggle slot status", err);
+      setError(err.response?.data?.error || "Failed to toggle slot status");
+    }
+  };
+
   const handleEdit = (slot) => {
     setEditingSlot(slot);
     setShowForm(true);
@@ -483,9 +509,19 @@ export default function ExamSlots() {
                       <div className="slot-meta">→ {formatDateTime(slot.endTime)}</div>
                     </td>
                     <td>
-                      <span className={`status-chip ${slot.isActive ? "active" : "inactive"}`}>
-                        {slot.isActive ? "Active" : "Inactive"}
-                      </span>
+                      <div className="status-row">
+                        <span className={`status-chip ${slot.isActive ? "active" : "inactive"}`}>
+                          {slot.isActive ? "Active" : "Inactive"}
+                        </span>
+                        <button
+                          type="button"
+                          className={`toggle-btn ${slot.isActive ? "active" : "inactive"}`}
+                          onClick={() => handleToggleStatus(slot.id, slot.isActive)}
+                          title={slot.isActive ? "Deactivate slot" : "Activate slot"}
+                        >
+                          {slot.isActive ? "🟢" : "🔴"}
+                        </button>
+                      </div>
                     </td>
                     <td>
                       <div className="slot-actions">
