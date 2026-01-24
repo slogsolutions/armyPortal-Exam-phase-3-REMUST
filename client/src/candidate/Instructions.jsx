@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import armyBg from "../../img/army.jpg";
 import "./Instructions.css";
 
 export default function Instructions() {
@@ -8,6 +9,8 @@ export default function Instructions() {
   const [agreed, setAgreed] = useState(false);
   const [candidate, setCandidate] = useState(null);
   const [slotInfo, setSlotInfo] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [withinWindow, setWithinWindow] = useState(false);
   const candidateId = searchParams.get("candidateId");
   const paperType = searchParams.get("paperType");
   const slotId = searchParams.get("slotId");
@@ -47,17 +50,48 @@ export default function Instructions() {
     }
   }, [navigate, paperType, slotId]);
 
-  const slotTimeRange = useMemo(() => {
-    if (!slotInfo) return null;
-    const start = slotInfo.startTime ? new Date(slotInfo.startTime) : null;
-    const end = slotInfo.endTime ? new Date(slotInfo.endTime) : null;
-    if (!start || !end) return null;
-    return `${start.toLocaleString()} - ${end.toLocaleString()}`;
-  }, [slotInfo]);
+  const slotStartMs = useMemo(() => (
+    slotInfo?.startTime ? new Date(slotInfo.startTime).getTime() : null
+  ), [slotInfo?.startTime]);
+
+  const slotWindowEndMs = useMemo(() => (
+    slotStartMs != null ? slotStartMs + 3 * 60 * 60 * 1000 : null
+  ), [slotStartMs]);
+
+  const slotStartDate = useMemo(() => (
+    slotStartMs != null ? new Date(slotStartMs) : null
+  ), [slotStartMs]);
+
+  const slotWindowEndDate = useMemo(() => (
+    slotWindowEndMs != null ? new Date(slotWindowEndMs) : null
+  ), [slotWindowEndMs]);
+
+  useEffect(() => {
+    const updateTimes = () => {
+      const now = new Date();
+      setCurrentTime(now);
+
+      if (slotStartMs != null && slotWindowEndMs != null) {
+        const nowMs = now.getTime();
+        setWithinWindow(nowMs >= slotStartMs && nowMs <= slotWindowEndMs);
+      } else {
+        setWithinWindow(false);
+      }
+    };
+
+    updateTimes();
+    const timer = setInterval(updateTimes, 1000);
+    return () => clearInterval(timer);
+  }, [slotStartMs, slotWindowEndMs]);
 
   const start = async () => {
     if (!agreed) {
-      alert("Please accept the instructions and terms to proceed");
+      alert("Please confirm the details are correct before starting the exam.");
+      return;
+    }
+
+    if (!withinWindow) {
+      alert("Your scheduled exam window is not active right now. Please wait for your shift to begin.");
       return;
     }
 
@@ -87,123 +121,157 @@ export default function Instructions() {
     }
   };
 
+  const profileInitial = (candidate?.name || "C").charAt(0).toUpperCase();
+  const tradeName = candidate?.trade?.name || candidate?.trade || "-";
+  const commandName = candidate?.command?.name || candidate?.command || "-";
+  const centerName = slotInfo?.center || candidate?.center?.name || commandName;
+  const currentTimeLabel = useMemo(() => currentTime.toLocaleString(), [currentTime]);
+  const shiftDateLabel = slotStartDate ? slotStartDate.toLocaleDateString() : "-";
+  const shiftStartLabel = slotStartDate ? slotStartDate.toLocaleTimeString() : "-";
+  const shiftEndLabel = slotWindowEndDate ? slotWindowEndDate.toLocaleTimeString() : "-";
+  const startButtonDisabled = !agreed || !withinWindow || !candidate;
+  const startButtonClasses = ["start-btn"];
+  if (!withinWindow) {
+    startButtonClasses.push("locked");
+  } else if (!agreed) {
+    startButtonClasses.push("disabled");
+  }
+
   return (
-    <div className="instructions-page">
-      <div className="instructions-container">
-        <div className="instructions-header">
-          <h1>ARMY EXAM PORTAL</h1>
-          <h2>2 Signal Training Centre Online Exam Portal</h2>
-          <h3>IMPORTANT INSTRUCTIONS - PLEASE READ CAREFULLY</h3>
-        </div>
-
-        <div className="slot-summary">
-          <div>
-            <p className="slot-label">Candidate</p>
-            <h4>{candidate?.name || "-"}</h4>
-            <p className="slot-subtext">Army No: {candidate?.armyNo || "-"}</p>
+    <div
+      className="candidate-dashboard-page"
+      style={{ backgroundImage: `url(${armyBg})` }}
+    >
+      <div className="dashboard-overlay">
+        <header className="dashboard-header">
+          <div className="welcome">
+            <span className="welcome-title">Candidate Dashboard</span>
+            <span>Welcome, {candidate?.name || "Candidate"}</span>
           </div>
-          <div>
-            <p className="slot-label">Paper</p>
-            <h4>{paperType}</h4>
-            <p className="slot-subtext">Sequence enforced</p>
+          <div className="profile">
+            <div className="profile-avatar">{profileInitial}</div>
+            <div className="profile-details">
+              <p><strong>Name:</strong> <span>{candidate?.name || "-"}</span></p>
+              <p><strong>Army No:</strong> <span>{candidate?.armyNo || "-"}</span></p>
+              <p><strong>Trade:</strong> <span>{tradeName}</span></p>
+              <p><strong>Command:</strong> <span>{commandName}</span></p>
+              <p><strong>Exam Centre:</strong> <span>{centerName || "-"}</span></p>
+            </div>
           </div>
-          <div>
-            <p className="slot-label">Assigned Slot</p>
-            {slotInfo ? (
-              <>
-                <h4>{slotTimeRange || "Scheduled"}</h4>
-                <p className="slot-subtext">
-                  {slotInfo.center || slotInfo.command || "Exam Centre"}
-                </p>
-              </>
-            ) : (
-              <>
-                <h4>Pending</h4>
-                <p className="slot-subtext warning">Contact the exam cell if no slot appears.</p>
-              </>
-            )}
+        </header>
+
+        <section className="motivation-section">
+          <h3>All the Best !!</h3>
+          <p className="motivation-text">
+            "Success is the sum of small efforts, repeated day in and day out. Give your best and make yourself proud!"
+          </p>
+        </section>
+
+        <section className="dashboard-section">
+          <div className="card">
+            <h2>Scheduled Exams</h2>
+            <div className="exam-card">
+              <div className="exam-detail">
+                <span className="label">Army Number:</span>
+                <span className="value">{candidate?.armyNo || "-"}</span>
+              </div>
+              <div className="exam-detail">
+                <span className="label">Name:</span>
+                <span className="value">{candidate?.name || "-"}</span>
+              </div>
+              <div className="exam-detail">
+                <span className="label">Trade:</span>
+                <span className="value">{tradeName}</span>
+              </div>
+              <div className="exam-detail">
+                <span className="label">Command:</span>
+                <span className="value">{commandName}</span>
+              </div>
+              <div className="exam-detail">
+                <span className="label">Center:</span>
+                <span className="value">{centerName || "-"}</span>
+              </div>
+              <div className="exam-detail">
+                <span className="label">Paper:</span>
+                <span className="value">{paperType || candidate?.activePaperType || "-"}</span>
+              </div>
+              <div className="exam-detail">
+                <span className="label">Shift:</span>
+                <span className="value">
+                  {slotStartDate ? `${shiftDateLabel} ${shiftStartLabel}` : "No shift assigned"}
+                </span>
+              </div>
+
+              <div className="exam-action">
+                <div className="confirm-wrapper">
+                  <input
+                    id="confirm-details"
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                  />
+                  <label htmlFor="confirm-details">I confirm the details are correct.</label>
+                </div>
+                <button
+                  className={startButtonClasses.join(" ")}
+                  disabled={startButtonDisabled}
+                  onClick={start}
+                >
+                  {withinWindow ? "Start Exam" : "Exam Locked (Outside Shift Window)"}
+                </button>
+              </div>
+
+              {slotInfo ? (
+                <div className={`status-info ${withinWindow ? "success" : "warning"}`}>
+                  <p><strong>Shift Details:</strong></p>
+                  <p>Date: {shiftDateLabel}</p>
+                  <p>Start Time: {shiftStartLabel}</p>
+                  <p>End Time (3 hrs window): {shiftEndLabel}</p>
+                  <p>Current time: {currentTimeLabel}</p>
+                  {withinWindow ? (
+                    <p className="status-note positive">✓ You can start the exam now (within 3-hour window).</p>
+                  ) : (
+                    <p className="status-note negative">⚠ You are outside the 3-hour window. Exam access is locked.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="status-info warning">
+                  <p>No shift assigned yet. Please contact the exam cell for scheduling.</p>
+                </div>
+              )}
+            </div>
           </div>
+
+          <div className="card">
+            <h2>Instructions</h2>
+            <div className="exam-card">
+              <ol className="instructions-list">
+                <li>There are total 05 parts in the Question paper – Part A, Part B, Part C, Part D and Part E.</li>
+                <li>Part A/B MCQ</li>
+                <li>Part C Short Answer Questions</li>
+                <li>Part D – Fill in the blanks/Short answer</li>
+                <li>Part E – Long Answer</li>
+                <li>Part F – True/False</li>
+                <li>All questions are compulsory. You have to attempt all questions.</li>
+                <li>Max marks for each question is shown.</li>
+                <li>Do not press any function keys (F1 to F12) or ESC during the exam.</li>
+                <li>Do not press Refresh/Reload button during the exam.</li>
+                <li>Do not press Back button during the exam.</li>
+                <li>The total time for the exam is displayed on top. Stick to the timeline for the exam.</li>
+                <li>You can mark the question to revisit at the end.</li>
+                <li>Finish your exam on time.</li>
+              </ol>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="footer-container">
+        <div className="footer-note developed">
+          Developed by SLOG Solutions Pvt Ltd and 2STC
         </div>
-
-        <div className="instructions-content">
-          <section className="instruction-section">
-            <h4>⚠️ SECURITY WARNINGS</h4>
-            <ul>
-              <li><strong>Your screen will be LOCKED during the exam</strong></li>
-              <li><strong>DO NOT close or refresh the browser window</strong></li>
-              <li><strong>DO NOT switch tabs or applications</strong></li>
-              <li><strong>DO NOT use Alt+Tab, Ctrl+Tab, or any keyboard shortcuts</strong></li>
-              <li><strong>All keyboard function keys (F1-F12) will be disabled</strong></li>
-              <li><strong>Right-click and developer tools are blocked</strong></li>
-              <li><strong>Any attempt to exit fullscreen will be logged</strong></li>
-            </ul>
-          </section>
-
-          <section className="instruction-section">
-            <h4>📋 EXAM RULES</h4>
-            <ul>
-              <li>The exam will start in <strong>FULLSCREEN MODE</strong></li>
-              <li>You must remain in fullscreen for the entire duration</li>
-              <li>All questions are <strong>Multiple Choice (MCQ)</strong></li>
-              <li>Select one option (A, B, C, or D) for each question</li>
-              <li>You can navigate between questions using the question panel</li>
-              <li>Review your answers before submitting</li>
-              <li><strong>Negative marking applies</strong> - wrong answers will deduct marks</li>
-            </ul>
-          </section>
-
-          <section className="instruction-section">
-            <h4>⏱️ TIME MANAGEMENT</h4>
-            <ul>
-              <li>A timer will be displayed at the top of the screen</li>
-              <li>The timer will turn <strong style={{color: 'red'}}>RED</strong> when 5 minutes remain</li>
-              <li>The exam will <strong>auto-submit</strong> when time expires</li>
-              <li>You cannot pause or extend the exam time</li>
-            </ul>
-          </section>
-
-          <section className="instruction-section">
-            <h4>✅ SUBMISSION</h4>
-            <ul>
-              <li>Click the <strong>"SUBMIT EXAM"</strong> button when you are finished</li>
-              <li>Once submitted, you cannot change your answers</li>
-              <li>Results will be displayed immediately after submission</li>
-              <li>Make sure you have answered all questions before submitting</li>
-            </ul>
-          </section>
-
-          <section className="instruction-section warning-box">
-            <h4>🚫 VIOLATIONS WILL RESULT IN:</h4>
-            <ul>
-              <li>Immediate exam termination</li>
-              <li>Disqualification from the examination</li>
-              <li>Report to the examination authority</li>
-            </ul>
-          </section>
-
-          <section className="agreement-section">
-            <label className="agreement-checkbox">
-              <input 
-                type="checkbox" 
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
-              />
-              <span>
-                I have read and understood all the instructions above. I agree to abide by all the rules 
-                and regulations. I understand that any violation will result in disqualification.
-              </span>
-            </label>
-          </section>
-        </div>
-
-        <div className="instructions-footer">
-          <button 
-            className="ready-button" 
-            onClick={start}
-            disabled={!agreed}
-          >
-            I AM READY TO START THE EXAM
-          </button>
+        <div className="footer-note reserved">
+          All Rights Reserved @ SLOG Solutions Pvt Ltd
         </div>
       </div>
     </div>

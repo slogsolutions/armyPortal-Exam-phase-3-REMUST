@@ -16,8 +16,7 @@ export default function CandidateLogin() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [candidateMeta, setCandidateMeta] = useState(null);
-  const [selectedPaper, setSelectedPaper] = useState("");
-  const [paperOptions, setPaperOptions] = useState([]);
+  const [candidatePapers, setCandidatePapers] = useState([]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -35,20 +34,15 @@ export default function CandidateLogin() {
             const exams = Array.isArray(res.data.candidate.selectedExamTypes)
               ? res.data.candidate.selectedExamTypes
               : [];
-            setPaperOptions(exams);
-            if (exams.length === 1) {
-              setSelectedPaper(exams[0]);
-            }
+            setCandidatePapers(exams);
           } else {
             setCandidateMeta(null);
-            setPaperOptions([]);
-            setSelectedPaper("");
+            setCandidatePapers([]);
           }
         } catch (err) {
           if (err.name !== "CanceledError") {
             setCandidateMeta(null);
-            setPaperOptions([]);
-            setSelectedPaper("");
+            setCandidatePapers([]);
           }
         }
       };
@@ -56,17 +50,15 @@ export default function CandidateLogin() {
       return () => controller.abort();
     } else {
       setCandidateMeta(null);
-      setPaperOptions([]);
-      setSelectedPaper("");
+      setCandidatePapers([]);
     }
   }, [form.armyNo]);
 
   const disableLogin = useMemo(() => {
     if (loading) return true;
     if (!form.armyNo || !form.dob) return true;
-    if (paperOptions.length > 0 && !selectedPaper) return true;
     return false;
-  }, [form.armyNo, form.dob, loading, paperOptions.length, selectedPaper]);
+  }, [form.armyNo, form.dob, loading]);
 
   const login = async (e) => {
     e.preventDefault();
@@ -76,31 +68,32 @@ export default function CandidateLogin() {
     try {
       const res = await api.post("/candidate/login", {
         ...form,
-        paperType: selectedPaper || null
+        paperType: null
       });
 
       const candidatePayload = res.data.candidate || {};
       const activePaper = candidatePayload.activePaperType;
       const slotId = candidatePayload.slotAssignment?.id;
 
-      if (!activePaper) {
-        setError("No exam is currently available for you. Please contact the exam cell.");
+      const selectedTypes = Array.isArray(candidatePayload.selectedExamTypes)
+        ? candidatePayload.selectedExamTypes
+        : [];
+      const completedPapers = Array.isArray(candidatePayload.completedPapers)
+        ? candidatePayload.completedPapers
+        : [];
+
+      const pendingPapers = selectedTypes.filter((paper) => !completedPapers.includes(paper));
+
+      if (!activePaper || pendingPapers.length === 0) {
+        setError("All allotted papers are already completed. Please contact the exam cell for assistance.");
         return;
       }
 
-      // ✅ Store token & candidate info
+      // Store token & candidate info
       localStorage.setItem("candidateToken", res.data.token);
       localStorage.setItem("candidate", JSON.stringify(candidatePayload));
 
-      const params = new URLSearchParams({
-        candidateId: String(candidatePayload.id),
-        paperType: activePaper
-      });
-      if (slotId) {
-        params.set("slotId", String(slotId));
-      }
-
-      navigate(`/candidate/instructions?${params.toString()}`);
+      navigate("/candidate/dashboard", { replace: true });
     } catch (err) {
       const apiError = err.response?.data?.error;
       if (apiError) {
@@ -161,29 +154,11 @@ export default function CandidateLogin() {
                 value={form.dob}
                 onChange={handleChange}
                 required
-                placeholder="Date of Birth (dd-mm-yyyy)"
+                placeholder="Date of Birth (yyyy-mm-dd)"
                 autoComplete="current-password"
                 disabled={loading}
               />
             </div>
-
-            {paperOptions.length > 0 && (
-              <div className="form-group">
-                <select
-                  name="paperType"
-                  value={selectedPaper}
-                  onChange={(e) => setSelectedPaper(e.target.value)}
-                  disabled={loading}
-                >
-                  <option value="">Select Paper</option>
-                  {paperOptions.map((paper) => (
-                    <option key={paper} value={paper}>
-                      {paper}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             {candidateMeta && (
               <div className="candidate-peek">
@@ -192,6 +167,9 @@ export default function CandidateLogin() {
                 <p><strong>Command:</strong> {candidateMeta.command?.name}</p>
                 {candidateMeta.center?.name && (
                   <p><strong>Centre:</strong> {candidateMeta.center.name}</p>
+                )}
+                {candidatePapers.length > 0 && (
+                  <p><strong>Allotted Papers:</strong> {candidatePapers.join(", ")}</p>
                 )}
               </div>
             )}
