@@ -43,10 +43,15 @@ export default function Result() {
   const {
     candidate = {},
     writtenResults = [],
-    practicalResults = [],
+    // practicalResults = [],
     trade = {},
-    summary = {}
+    // summary = {}
   } = data;
+
+  // Filter only written paper results (WP-I, WP-II, WP-III)
+  const writtenPaperResults = writtenResults.filter(result => 
+    result.type && result.type.startsWith('WP-')
+  );
 
   const formatValue = (value) => {
     if (value === null || value === undefined || value === "") {
@@ -55,14 +60,37 @@ export default function Result() {
     return value;
   };
 
-  const extraFields = [
-    { key: "bpet", label: "BPET" },
-    { key: "ppt", label: "PPT" },
-    { key: "cpt", label: "CPT" },
-    { key: "grade", label: "Computed Grade" },
-    { key: "gradeOverride", label: "Grade Override" },
-    { key: "overallResult", label: "Overall Result" }
-  ];
+  // Calculate question statistics for each written paper
+  const calculateQuestionStats = (result) => {
+    if (!result || result.status === "NA" || result.status === "PENDING") {
+      return { attempted: 0, correct: 0, wrong: 0, negativeMarks: 0 };
+    }
+
+    const totalQuestions = result.totalQuestions || 0;
+    const correctAnswers = result.correctAnswers || 0;
+    const wrongAnswers = result.wrongAnswers || 0;
+    const attempted = correctAnswers + wrongAnswers;
+    const negativeMarking = trade.negativeMarking || 0;
+    const negativeMarks = wrongAnswers * negativeMarking;
+
+    return {
+      attempted,
+      correct: correctAnswers,
+      wrong: wrongAnswers,
+      total: totalQuestions,
+      negativeMarks: negativeMarks.toFixed(2)
+    };
+  };
+
+  // Commented out for future use
+  // const extraFields = [
+  //   { key: "bpet", label: "BPET" },
+  //   { key: "ppt", label: "PPT" },
+  //   { key: "cpt", label: "CPT" },
+  //   { key: "grade", label: "Computed Grade" },
+  //   { key: "gradeOverride", label: "Grade Override" },
+  //   { key: "overallResult", label: "Overall Result" }
+  // ];
 
   return (
     <div className="result-page">
@@ -117,73 +145,116 @@ export default function Result() {
             </div>
           </section>
 
-          {/* Theory Results */}
+          {/* Written Paper Results - Enhanced */}
           <section className="results-section">
-            <h4>Theory Results</h4>
-            <div className="results-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Paper Type</th>
-                    <th>Score</th>
-                    <th>Total Marks</th>
-                    <th>Percentage</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {writtenResults.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="empty">No written results available</td>
-                    </tr>
-                  )}
-                  {writtenResults.map((result, index) => (
-                    <tr key={index}>
-                      <td className="paper-type">{result.type || result.paper}</td>
-                      <td className="score">
-                        {result.status === "NA" ? (
-                          <span className="na">N/A</span>
-                        ) : result.status === "PENDING" ? (
-                          <span className="pending">Pending</span>
-                        ) : (
-                          result.score?.toFixed(2) || "-"
-                        )}
-                      </td>
-                      <td className="total-marks">
-                        {result.status === "NA" || result.status === "PENDING" ? (
-                          "-"
-                        ) : (
-                          result.totalMarks?.toFixed(2) || "-"
-                        )}
-                      </td>
-                      <td className="percentage">
-                        {result.status === "NA" || result.status === "PENDING" ? (
-                          "-"
-                        ) : result.percentage !== null ? (
-                          `${result.percentage}%`
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td className="status">
-                        {result.status === "NA" ? (
-                          <span className="badge na">N/A</span>
-                        ) : result.status === "PENDING" ? (
-                          <span className="badge pending">Pending</span>
-                        ) : result.status === "PASS" ? (
-                          <span className="badge pass">PASS</span>
-                        ) : (
-                          <span className="badge fail">FAIL</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <h4>Written Paper Results</h4>
+            {writtenPaperResults.length === 0 ? (
+              <div className="empty">No written paper results available</div>
+            ) : (
+              <div className="written-results-grid">
+                {writtenPaperResults.map((result, index) => {
+                  const stats = calculateQuestionStats(result);
+                  const isCompleted = result.status !== "NA" && result.status !== "PENDING";
+                  
+                  return (
+                    <div key={index} className="written-paper-card">
+                      <div className="paper-header">
+                        <h5 className="paper-title">{result.type || result.paper}</h5>
+                        <span className={`status-badge ${result.status?.toLowerCase() || 'pending'}`}>
+                          {result.status || 'PENDING'}
+                        </span>
+                      </div>
+                      
+                      {isCompleted ? (
+                        <>
+                          <div className="score-summary">
+                            <div className="main-score">
+                              <span className="score-value">{result.score?.toFixed(2) || '0.00'}</span>
+                              <span className="score-total">/ {result.totalMarks?.toFixed(2) || '0.00'}</span>
+                            </div>
+                            <div className="percentage">
+                              <span className="percentage-value">{result.percentage || 0}%</span>
+                            </div>
+                          </div>
+
+                          <div className="question-stats">
+                            <div className="stats-grid">
+                              <div className="stat-item">
+                                <span className="stat-label">Total Questions</span>
+                                <span className="stat-value">{stats.total}</span>
+                              </div>
+                              <div className="stat-item">
+                                <span className="stat-label">Attempted</span>
+                                <span className="stat-value">{stats.attempted}</span>
+                              </div>
+                              <div className="stat-item correct">
+                                <span className="stat-label">Correct</span>
+                                <span className="stat-value">{stats.correct}</span>
+                              </div>
+                              <div className="stat-item wrong">
+                                <span className="stat-label">Wrong</span>
+                                <span className="stat-value">{stats.wrong}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {trade.negativeMarking > 0 && stats.wrong > 0 && (
+                            <div className="negative-marking-info">
+                              <div className="negative-marking-header">
+                                <span className="negative-icon">⚠️</span>
+                                <span className="negative-title">Negative Marking Applied</span>
+                              </div>
+                              <div className="negative-details">
+                                <span className="negative-rate">
+                                  {trade.negativeMarking} marks deducted per wrong answer
+                                </span>
+                                <span className="negative-total">
+                                  Total deduction: {stats.negativeMarks} marks
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="pending-state">
+                          <div className="pending-icon">⏳</div>
+                          <p className="pending-text">
+                            {result.status === "NA" ? "Not Available" : "Result Pending"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* Trade Information */}
+          <section className="trade-info-section">
+            <div className="trade-info-card">
+              <h4>Exam Configuration</h4>
+              <div className="trade-details">
+                <div className="trade-detail">
+                  <span className="detail-label">Trade:</span>
+                  <span className="detail-value">{candidate.trade || "-"}</span>
+                </div>
+                <div className="trade-detail">
+                  <span className="detail-label">Negative Marking:</span>
+                  <span className="detail-value">
+                    {trade.negativeMarking ? `${trade.negativeMarking} marks per wrong answer` : "No negative marking"}
+                  </span>
+                </div>
+                <div className="trade-detail">
+                  <span className="detail-label">Minimum Passing:</span>
+                  <span className="detail-value">{trade.minPercent || 0}%</span>
+                </div>
+              </div>
             </div>
           </section>
 
-          {/* Practical Results */}
+          {/* COMMENTED OUT FOR FUTURE USE */}
+          {/* 
           <section className="results-section practical-horizontal">
             <h4>Practical Results</h4>
             {practicalResults.length === 0 ? (
@@ -229,22 +300,10 @@ export default function Result() {
             )}
             <p className="practical-note">Note: Practical marks are entered by Exam Officers.</p>
           </section>
+          */}
 
-          {/* Summary */}
-          <section className="summary-section">
-            <div className="summary-card">
-              <h4>Negative Marking Applied</h4>
-              <p className="negative-marking">
-                {trade.negativeMarking ? `${trade.negativeMarking} marks per wrong answer` : "No negative marking"}
-              </p>
-            </div>
-            <div className="summary-card">
-              <h4>Minimum Passing Percentage</h4>
-              <p className="min-percent">{trade.minPercent}%</p>
-            </div>
-          </section>
-
-          {/* Additional Metrics */}
+          {/* COMMENTED OUT FOR FUTURE USE */}
+          {/*
           <section className="aptitude-section">
             <h4>Physical & Override Metrics</h4>
             <div className="aptitude-grid">
@@ -267,6 +326,7 @@ export default function Result() {
               })}
             </div>
           </section>
+          */}
         </div>
 
         <div className="result-footer">

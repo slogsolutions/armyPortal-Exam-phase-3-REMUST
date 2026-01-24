@@ -97,7 +97,8 @@ exports.getResult = async (req, res) => {
     const attempts = await prisma.examAttempt.findMany({
       where: { candidateId },
       include: {
-        examPaper: true
+        examPaper: true,
+        answers: true
       }
     });
 
@@ -146,6 +147,19 @@ exports.getResult = async (req, res) => {
             : attempt.status
           : "NA";
 
+        // Calculate question statistics if attempt exists
+        let questionStats = {
+          totalQuestions: 0,
+          correctAnswers: 0,
+          wrongAnswers: 0
+        };
+
+        if (attempt && attempt.answers) {
+          questionStats.totalQuestions = attempt.answers.length;
+          questionStats.correctAnswers = attempt.answers.filter(answer => answer.isCorrect).length;
+          questionStats.wrongAnswers = attempt.answers.filter(answer => !answer.isCorrect).length;
+        }
+
         return {
           type,
           category: "WRITTEN",
@@ -154,7 +168,8 @@ exports.getResult = async (req, res) => {
           totalMarks: maxMarks,
           percentage: percentage !== null ? parseFloat(percentage.toFixed(2)) : null,
           status,
-          submittedAt: attempt?.submittedAt || null
+          submittedAt: attempt?.submittedAt || null,
+          ...questionStats
         };
       });
 

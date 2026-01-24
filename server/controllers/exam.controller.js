@@ -952,3 +952,44 @@ function decryptDatFile(buffer, password) {
     throw new Error(`Decryption failed: ${error.message}`);
   }
 }
+
+/**
+ * Debug endpoint to check question counts
+ */
+exports.debugQuestionCounts = async (req, res) => {
+  try {
+    // Get all exam papers with question counts
+    const examPapers = await prisma.examPaper.findMany({
+      include: {
+        trade: true,
+        _count: {
+          select: { questions: true }
+        }
+      }
+    });
+
+    // Get all questions grouped by exam paper
+    const questionsByPaper = await prisma.question.groupBy({
+      by: ['examPaperId'],
+      _count: {
+        examPaperId: true
+      }
+    });
+
+    res.json({
+      examPapers: examPapers.map(paper => ({
+        id: paper.id,
+        tradeId: paper.tradeId,
+        tradeName: paper.trade.name,
+        paperType: paper.paperType,
+        isActive: paper.isActive,
+        questionCount: paper._count.questions
+      })),
+      questionsByPaper,
+      totalPapers: examPapers.length,
+      totalQuestions: questionsByPaper.reduce((sum, group) => sum + group._count.examPaperId, 0)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

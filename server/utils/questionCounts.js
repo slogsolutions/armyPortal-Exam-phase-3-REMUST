@@ -7,58 +7,54 @@ const attachQuestionCounts = async (slots = [], prismaClient) => {
     throw new Error("attachQuestionCounts requires a Prisma client instance");
   }
 
+  // Create a map to store question counts for each trade-paperType combination
+  const questionCountMap = new Map();
+
+  // Get unique trade-paperType combinations from slots
   const uniquePairs = Array.from(
     new Set(
       slots.map((slot) => `${slot.tradeId}-${slot.paperType}`)
     )
   );
 
-  const orConditions = uniquePairs.map((pairKey) => {
-    const [tradeId, paperType] = pairKey.split("-");
-    return {
-      tradeId: Number(tradeId),
-      paperType,
-      isActive: true
-    };
-  });
+  if (uniquePairs.length > 0) {
+    // For each unique pair, get the question count
+    for (const pairKey of uniquePairs) {
+      const [tradeId, paperType] = pairKey.split("-");
+      
+      try {
+        // Find the exam paper for this trade and paper type
+        const examPaper = await prismaClient.examPaper.findFirst({
+          where: {
+            tradeId: Number(tradeId),
+            paperType: paperType,
+            isActive: true
+          },
+          include: {
+            _count: {
+              select: { questions: true }
+            }
+          }
+        });
 
-  const pairToCount = new Map();
-
-  if (orConditions.length > 0) {
-    const papers = await prismaClient.examPaper.findMany({
-      where: { OR: orConditions },
-      select: {
-        id: true,
-        tradeId: true,
-        paperType: true
+        const questionCount = examPaper?._count?.questions || 0;
+        questionCountMap.set(pairKey, questionCount);
+        
+      } catch (error) {
+        console.error(`❌ Error getting question count for ${pairKey}:`, error);
+        questionCountMap.set(pairKey, 0);
       }
-    });
-
-    if (papers.length > 0) {
-      const questionGroups = await prismaClient.question.groupBy({
-        by: ["examPaperId"],
-        where: {
-          examPaperId: { in: papers.map((paper) => paper.id) }
-        },
-        _count: { examPaperId: true }
-      });
-
-      const idToCount = new Map(
-        questionGroups.map((group) => [group.examPaperId, group._count.examPaperId])
-      );
-
-      papers.forEach((paper) => {
-        const key = `${paper.tradeId}-${paper.paperType}`;
-        pairToCount.set(key, idToCount.get(paper.id) || 0);
-      });
     }
   }
 
+  // Attach question counts to slots
   return slots.map((slot) => {
     const key = `${slot.tradeId}-${slot.paperType}`;
+    const questionCount = questionCountMap.get(key) || 0;
+    
     return {
       ...slot,
-      questionCount: pairToCount.get(key) ?? 0
+      questionCount
     };
   });
 };

@@ -169,6 +169,21 @@ export default function ExamSlots() {
     }
   };
 
+  const debugQuestionCounts = async () => {
+    try {
+      const res = await api.get("/exam/debug/question-counts");
+      console.log("🔍 Debug Question Counts:", res.data);
+      alert(`Debug info logged to console. Total papers: ${res.data.totalPapers}, Total questions: ${res.data.totalQuestions}`);
+    } catch (err) {
+      console.error("Failed to get debug info", err);
+      alert("Failed to get debug info");
+    }
+  };
+
+  const refreshSlots = async () => {
+    await fetchData();
+  };
+
   const handleToggleStatus = async (slotId, currentStatus) => {
     try {
       const res = await api.patch(`/exam-slot/${slotId}/toggle-status`);
@@ -277,15 +292,32 @@ export default function ExamSlots() {
     <div className="exam-slots-page">
       <div className="slots-header">
         <h2>Exam Slots Management</h2>
-        <button
-          className="add-slot-btn"
-          onClick={() => {
-            setShowForm(true);
-            resetForm();
-          }}
-        >
-          + Create New Slot
-        </button>
+        <div className="header-actions">
+          <button
+            className="debug-btn"
+            onClick={debugQuestionCounts}
+            title="Debug question counts (check console)"
+          >
+            � Debug
+          </button>
+          <button
+            className="refresh-btn"
+            onClick={refreshSlots}
+            disabled={loading}
+            title="Refresh question counts"
+          >
+            🔄 Refresh
+          </button>
+          <button
+            className="add-slot-btn"
+            onClick={() => {
+              setShowForm(true);
+              resetForm();
+            }}
+          >
+            + Create New Slot
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
@@ -501,8 +533,15 @@ export default function ExamSlots() {
                       <div className="slot-meta">{slot.center?.name || "—"}</div>
                     </td>
                     <td>
-                      <span className="paper-type-pill">{slot.paperType || "—"}</span>
-                      <span className="question-pill">{slot.questionCount ?? 0} Qs</span>
+                      <div className="paper-info">
+                        <span className="paper-type-pill">{slot.paperType || "—"}</span>
+                        <span className={`question-pill ${slot.questionCount > 0 ? 'has-questions' : 'no-questions'}`}>
+                          {slot.questionCount || 0} Qs
+                        </span>
+                        {slot.questionCount === 0 && (
+                          <span className="warning-text">No questions uploaded</span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <div className="slot-meta">{formatDateTime(slot.startTime)}</div>
