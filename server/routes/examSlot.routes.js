@@ -11,6 +11,9 @@ router.delete("/:id", adminAuth, ctrl.deleteExamSlot);
 router.get("/:id", adminAuth, ctrl.getSlotDetails);
 router.post("/:id/auto-assign", adminAuth, ctrl.triggerAutoAssignment);
 
+// Test endpoint without auth (temporary for debugging)
+router.get("/test-question-counts", ctrl.getExamSlots);
+
 // Candidate routes
 router.get("/candidate/:candidateId", ctrl.getAvailableSlots);
 router.post("/assign", ctrl.assignToSlot);

@@ -135,6 +135,8 @@ exports.getExamSlots = async (req, res) => {
       };
     }
 
+    console.log("🔍 getExamSlots: Fetching slots with where clause:", whereClause);
+
     const examSlotsRaw = await prisma.examSlot.findMany({
       where: whereClause,
       include: {
@@ -153,10 +155,21 @@ exports.getExamSlots = async (req, res) => {
       }
     });
 
+    console.log(`🔍 getExamSlots: Found ${examSlotsRaw.length} raw slots`);
+    examSlotsRaw.forEach(slot => {
+      console.log(`🔍 Raw slot ${slot.id}: tradeId=${slot.tradeId}, paperType=${slot.paperType}, trade=${slot.trade?.name}`);
+    });
+
     const examSlots = await attachQuestionCounts(examSlotsRaw, prisma);
+
+    console.log(`🔍 getExamSlots: Returning ${examSlots.length} enriched slots`);
+    examSlots.forEach(slot => {
+      console.log(`🔍 Enriched slot ${slot.id}: questionCount=${slot.questionCount}`);
+    });
 
     res.json(examSlots);
   } catch (error) {
+    console.error("❌ getExamSlots error:", error);
     res.status(500).json({ error: error.message });
   }
 };

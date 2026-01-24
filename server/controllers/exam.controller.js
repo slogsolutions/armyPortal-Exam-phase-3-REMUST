@@ -958,6 +958,8 @@ function decryptDatFile(buffer, password) {
  */
 exports.debugQuestionCounts = async (req, res) => {
   try {
+    console.log("🔍 Debug endpoint called");
+    
     // Get all exam papers with question counts
     const examPapers = await prisma.examPaper.findMany({
       include: {
@@ -968,6 +970,19 @@ exports.debugQuestionCounts = async (req, res) => {
       }
     });
 
+    console.log(`🔍 Found ${examPapers.length} exam papers`);
+
+    // Get all exam slots
+    const examSlots = await prisma.examSlot.findMany({
+      include: {
+        trade: true,
+        command: true,
+        center: true
+      }
+    });
+
+    console.log(`🔍 Found ${examSlots.length} exam slots`);
+
     // Get all questions grouped by exam paper
     const questionsByPaper = await prisma.question.groupBy({
       by: ['examPaperId'],
@@ -976,7 +991,27 @@ exports.debugQuestionCounts = async (req, res) => {
       }
     });
 
-    res.json({
+    console.log(`🔍 Found questions in ${questionsByPaper.length} papers`);
+
+    // Create mapping between slots and papers
+    const slotPaperMapping = [];
+    for (const slot of examSlots) {
+      const matchingPaper = examPapers.find(paper => 
+        paper.tradeId === slot.tradeId && paper.paperType === slot.paperType
+      );
+      
+      slotPaperMapping.push({
+        slotId: slot.id,
+        slotTrade: slot.trade?.name,
+        slotPaperType: slot.paperType,
+        slotTradeId: slot.tradeId,
+        matchingPaperId: matchingPaper?.id,
+        matchingPaperQuestions: matchingPaper?._count?.questions || 0,
+        hasMatch: !!matchingPaper
+      });
+    }
+
+    const response = {
       examPapers: examPapers.map(paper => ({
         id: paper.id,
         tradeId: paper.tradeId,
@@ -985,11 +1020,33 @@ exports.debugQuestionCounts = async (req, res) => {
         isActive: paper.isActive,
         questionCount: paper._count.questions
       })),
+      examSlots: examSlots.map(slot => ({
+        id: slot.id,
+        tradeId: slot.tradeId,
+        tradeName: slot.trade?.name,
+        paperType: slot.paperType,
+        commandName: slot.command?.name,
+        centerName: slot.center?.name,
+        isActive: slot.isActive
+      })),
+      slotPaperMapping,
       questionsByPaper,
       totalPapers: examPapers.length,
-      totalQuestions: questionsByPaper.reduce((sum, group) => sum + group._count.examPaperId, 0)
+      totalSlots: examSlots.length,
+      totalQuestions: questionsByPaper.reduce((sum, group) => sum + group._count.examPaperId, 0),
+      unmatchedSlots: slotPaperMapping.filter(mapping => !mapping.hasMatch).length
+    };
+
+    console.log("🔍 Debug response prepared:", {
+      totalPapers: response.totalPapers,
+      totalSlots: response.totalSlots,
+      totalQuestions: response.totalQuestions,
+      unmatchedSlots: response.unmatchedSlots
     });
+
+    res.json(response);
   } catch (error) {
+    console.error("❌ Debug endpoint error:", error);
     res.status(500).json({ error: error.message });
   }
 };
